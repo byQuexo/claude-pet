@@ -44,12 +44,15 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
   - Weapon types: sword, axe, dagger, staff.
   - Elements: 🔥 fire, ☠ poison, ❄ frost, ⚡ lightning.
   - Affixes such as lifesteal, thorns, regeneration, warding and shadows.
+  - Every item has a power score (PWR), and drops are logged with ▲/▼ against what's equipped.
+  - **Unique legendaries** (★): six one-of-a-kind items with a special effect that grow with your pet: Rubber Duck of Insight, Ctrl+Z Circlet (undoes a killing blow once per fight), Production Key, Infinite Loop Boots, Stack Overflow Plate and The Linter's Edge.
+  - **Sets** (◆): On-Call (helmet, armor, boots: 3% HP back every round), Hacker (dagger, charm, boots: +30% crit damage) and Architect (staff, armor, helmet: a 25% HP shield every fight).
 - **Gear is drawn on the pet:** each form has anchor points for its head, hand, chest, neck and feet. Weapons are held in the element's colour, helmets get a plume at epic and up, armor is a breastplate in the rarity's material (iron to obsidian), boots recolour the feet, and charms hang at the neck. `pet gear off` hides it.
 
   ![Every form in common, epic, legendary and mythic gear](docs/gear.png)
-- **A secret boss:** any fight has a 1-in-1000 chance of being something else entirely. It's tougher than any boss and can't be fled. Beat it once and you keep a 🏅 badge forever, next to your pet's name.
+- **A secret boss:** any fight has a 1-in-1000 chance of being something else entirely. It's tougher than any boss and can't be fled. Beat it once and you keep a 🏅 badge forever, next to your pet's name, plus +5% XP for good.
 - **Combat:** armor reduces damage, and evasion rating gives a chance to dodge, with diminishing returns. Monsters have elemental weaknesses and resistances, and some poison, chill or burn your pet. The pet drinks potions when it's low, retreats from fights it's losing, and picks safer fights after a losing streak.
-- **Town:** every 10 fights the pet fully heals, opens loot crates, crafts, sells leftovers and shops. It decides what to buy from its situation (low on potions, a boss due soon, an empty gear slot, which monsters keep showing up) and logs why.
+- **Town:** every 10 fights the pet fully heals, opens loot crates, crafts, sells leftovers and shops. The blacksmith reforges (+10% per level, up to +5) and ascends gear to the next rarity, and now and then a Legendary Merchant turns up with legendary or unique stock. It decides what to buy from its situation (low on potions, a boss due soon, an empty gear slot, which monsters keep showing up) and logs why.
 - **Crafting:** the pet does this on its own.
   - Fuse 3 spare items of the same slot and rarity into the next rarity.
   - Infuse a weapon with an element its recent enemies are weak to.
@@ -69,6 +72,7 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
 | `pet status` | print the statusline card once |
 | `pet seed` | what the egg has observed so far, or the seed and what it decided |
 | `pet mode full` / `minimal` / `compact` | full: sprite + stats card · minimal: only the pet, far right, beside your statusline · compact: 2 text lines |
+| `pet gear` | gear panel: item icons, cards with power and set progress, and the bag with ▲/▼ comparisons |
 | `pet gear on` / `off` | show or hide gear drawn on the pet (it stays equipped and listed in the card) |
 | `pet width <n>` / `auto` | terminal width for minimal mode, if `$COLUMNS` is wrong |
 | `pet install` / `uninstall` | wire into, or remove from, Claude Code settings |

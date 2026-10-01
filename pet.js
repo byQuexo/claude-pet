@@ -372,6 +372,21 @@ const TOMES = [
   { name: 'Parkour Tome', stat: 'evasion', amt: (L) => r1(2 + 0.3 * L) },
 ];
 const MAX_POTIONS = 5;
+const UNIQUES = {
+  insight: { name: 'Rubber Duck of Insight', slot: 'charm', desc: 'weakness hits deal 2× instead of 1.5×', stats: (L) => ({ crit: 0.09, spd: r1((0.3 + 0.08 * L) * 5), evasion: r1((1 + 0.4 * L) * 5) }) },
+  undo: { name: 'Ctrl+Z Circlet', slot: 'helmet', desc: 'once per fight, undoes a killing blow', stats: (L) => ({ def: r1((0.5 + 0.25 * L) * 4.8), maxHp: Math.round((3 + 1.5 * L) * 4.8) }) },
+  prodkey: { name: 'Production Key', slot: 'weapon', type: 'dagger', desc: 'double gold, but monsters hit 10% harder', stats: (L) => ({ atk: r1((1.5 + 0.7 * L) * 3.8), crit: 0.08 }) },
+  loop: { name: 'Infinite Loop Boots', slot: 'boots', desc: '+15% chance to strike twice', stats: (L) => ({ spd: r1((0.4 + 0.12 * L) * 5), evasion: r1((2 + 0.8 * L) * 4.8), def: r1((0.3 + 0.15 * L) * 4.8), multi: 0.15 }) },
+  overflow: { name: 'Stack Overflow Plate', slot: 'armor', desc: 'reflects 30% of damage taken', stats: (L) => ({ def: r1((1 + 0.45 * L) * 4.8), maxHp: Math.round((4 + 2 * L) * 4.8), thorns: 0.3 }) },
+  linter: { name: "The Linter's Edge", slot: 'weapon', type: 'sword', desc: 'crits deal 2.5× instead of 2×', stats: (L) => ({ atk: r1((1.5 + 0.7 * L) * 5), crit: 0.05 }) },
+};
+const SETS = {
+  oncall: { label: 'On-Call', slots: ['helmet', 'armor', 'boots'], bonus: '3% HP back every round' },
+  hacker: { label: 'Hacker', slots: ['weapon', 'charm', 'boots'], type: 'dagger', bonus: '+30% crit damage' },
+  architect: { label: 'Architect', slots: ['weapon', 'armor', 'helmet'], type: 'staff', bonus: 'a 25% HP shield at the start of every fight' },
+};
+const SET_CHANCE = 0.35;
+const UNIQUE_CHANCE = 0.04;
 // Diminishing returns: the same rating dodges less against higher-level monsters.
 const evadeChance = (rating, level) => Math.min(0.6, rating / (rating + 40 + 8 * level));
 const TOWN_EVERY = 10;
@@ -572,6 +587,7 @@ function checkEvolve(p) {
 }
 
 function gainXp(p, n) {
+  if ((p.badges || []).length && n > 1) n = Math.round(n * 1.05);
   p.xp += n;
   while (p.xp >= xpToNext(p.level)) {
     p.xp -= xpToNext(p.level);
@@ -598,7 +614,7 @@ function spawn(p, bucket, boss) {
   return {
     name: (elite ? 'Elite ' : '') + pick(k.names), kind, level, pal: randInt(0, k.pals.length - 1), boss, elite,
     maxHp: Math.round((18 + 10 * level) * offence * k.hp * (boss ? 1.8 : 1) * (elite ? 1.4 : 1)),
-    atk: (4 + 2.2 * level) * toughness * k.atk * (boss ? 1.05 : 1) * (elite ? 1.15 : 1),
+    atk: (4 + 2.2 * level) * toughness * (wears(p, 'prodkey') ? 1.1 : 1) * k.atk * (boss ? 1.05 : 1) * (elite ? 1.15 : 1),
     def: (1 + 0.8 * level) * k.def,
     spd: (4 + 0.5 * level) * k.spd,
   };
@@ -614,12 +630,17 @@ function fight(p, m) {
   let php = p.hp, mhp = m.maxHp;
   const rounds = [];
   const push = (o) => rounds.push({ d: 0, ...o, php, mhp });
-  const hit = (atk, def, crit) => {
+  const critMult = (wears(p, 'linter') ? 2.5 : 2) + (setActive(p, 'hacker') ? 0.3 : 0);
+  const hit = (atk, def, crit, mult = 2) => {
     const c = Math.random() < crit;
-    return [Math.max(1, Math.round((atk * rand(0.85, 1.15) - def * 0.5) * (c ? 2 : 1))), c];
+    return [Math.max(1, Math.round((atk * rand(0.85, 1.15) - def * 0.5) * (c ? mult : 1))), c];
   };
+  let canUndo = wears(p, 'undo');
+  let shield = setActive(p, 'architect') ? Math.round(s.maxHp * 0.25) : 0;
+  const regenRound = setActive(p, 'oncall') ? Math.round(s.maxHp * 0.03) : 0;
+  const rescue = () => { if (php <= 0 && canUndo) { canUndo = false; php = Math.round(s.maxHp * 0.3); push({ a: 'undo' }); } };
   const el = (p.gear.weapon && p.gear.weapon.element) || (p.stage >= 1 && p.species ? SPECIES[p.species].innate : null);
-  const elMult = !el || el === 'shadow' ? 1 : k.weak === el ? 1.5 : k.resist === el || k.resist === 'all' ? 0.6 : 1;
+  const elMult = !el || el === 'shadow' ? 1 : k.weak === el ? (wears(p, 'insight') ? 2 : 1.5) : k.resist === el || k.resist === 'all' ? 0.6 : 1;
   const gaze = p.stage >= 1 && p.species === 'void' ? NULL_GAZE : 0;
   const resist = Math.min(0.75, s.resist);
   const dodge = evadeChance(s.evasion, m.level);
@@ -635,8 +656,9 @@ function fight(p, m) {
     for (const who of order) {
       if (php <= 0 || mhp <= 0) break;
       if (who === 'p') {
-        if (fx.pBurn > 0) { fx.pBurn--; const d = Math.max(1, Math.round(fx.pBurnDmg * (1 - resist))); php = Math.max(0, php - d); push({ a: 'mdot', el: 'fire', d }); }
-        if (fx.pPoison > 0 && php > 0) { const d = Math.max(1, Math.round(m.atk * 0.06 * fx.pPoison * (1 - resist))); php = Math.max(0, php - d); push({ a: 'mdot', el: 'poison', d }); }
+        if (regenRound && php > 0) php = Math.min(s.maxHp, php + regenRound);
+        if (fx.pBurn > 0) { fx.pBurn--; const d = Math.max(1, Math.round(fx.pBurnDmg * (1 - resist))); php = Math.max(0, php - d); push({ a: 'mdot', el: 'fire', d }); rescue(); }
+        if (fx.pPoison > 0 && php > 0) { const d = Math.max(1, Math.round(m.atk * 0.06 * fx.pPoison * (1 - resist))); php = Math.max(0, php - d); push({ a: 'mdot', el: 'poison', d }); rescue(); }
         if (php <= 0) break;
         if (fx.chilled) { fx.chilled = false; push({ a: 'chilled', el: 'frost' }); continue; }
         if (php < s.maxHp * 0.3 && p.potions > 0) {
@@ -653,7 +675,7 @@ function fight(p, m) {
         const swings = Math.random() < s.multi ? 2 : 1;
         for (let n = 0; n < swings && mhp > 0; n++) {
           if (Math.random() < k.evade) { push({ a: 'miss' }); continue; }
-          let [d, c] = hit(s.atk, m.def, s.crit);
+          let [d, c] = hit(s.atk, m.def, s.crit, critMult);
           d = Math.max(1, Math.round(d * elMult));
           mhp = Math.max(0, mhp - d);
           php = Math.min(s.maxHp, php + Math.round(d * s.lifesteal));
@@ -676,10 +698,12 @@ function fight(p, m) {
         if (fx.frozen) { fx.frozen = false; push({ a: 'frozen', el: 'frost' }); continue; }
         if (Math.random() < dodge) { push({ a: 'evade' }); continue; }
         if (Math.random() < gaze) { push({ a: 'null', el: 'shadow' }); continue; }
-        const [d, c] = hit(m.atk, s.def, 0.05);
+        let [d, c] = hit(m.atk, s.def, 0.05);
+        if (shield) { const soak = Math.min(shield, d); shield -= soak; d -= soak; if (!d) { push({ a: 'shield' }); continue; } }
         php = Math.max(0, php - d);
         mhp = Math.max(0, mhp - Math.round(d * s.thorns));
         push({ a: 'm', d, c });
+        rescue();
         if (k.attack && php > 0 && Math.random() < k.proc * (1 - resist)) {
           if (k.attack === 'poison') fx.pPoison = Math.min(3, fx.pPoison + 1);
           if (k.attack === 'frost') fx.chilled = true;
@@ -707,14 +731,51 @@ function makeItem(level, weights, forced = {}) {
   const affixes = Math.random() < AFFIX_CHANCE[ri] ? [pick(AFFIXES)] : [];
   if (ri >= 3) affixes.push(pick(AFFIXES.filter((a) => a !== affixes[0])));
   for (const a of affixes) for (const [k, v] of Object.entries(a.stats(level, mult))) stats[k] = r2((stats[k] || 0) + v);
+  const sets = ri >= 2 && Math.random() < SET_CHANCE ? Object.entries(SETS).filter(([, st]) => st.slots.includes(slot) && (slot !== 'weapon' || st.type === type)) : [];
+  const set = sets.length ? pick(sets)[0] : undefined;
+  if (set) name = `${SETS[set].label} ${pick(type ? WEAPON_TYPES[type].names : GEAR_BASES[slot])}`;
   if (affixes.length) name += ` ${affixes[0].name}`;
-  return { name, slot, type, element, rarity: ri, level, stats, affixes: affixes.map((a) => a.name) };
+  return { name, slot, type, element, rarity: ri, level, stats, affixes: affixes.map((a) => a.name), set };
+}
+
+// Uniques grow with the pet, so a lucky early drop stays worth wearing.
+function levelUniques(p) {
+  for (const it of [...Object.values(p.gear), ...p.inventory]) {
+    if (!it || !it.unique || it.level >= p.level) continue;
+    it.level = p.level;
+    it.stats = UNIQUES[it.unique].stats(p.level);
+    const f = Math.pow(1.1, it.plus || 0);
+    for (const k of Object.keys(it.stats)) if (k !== 'multi' && k !== 'thorns') it.stats[k] = k === 'maxHp' ? Math.round(it.stats[k] * f) : r2(it.stats[k] * f);
+  }
+}
+
+function makeUnique(id, level) {
+  const u = UNIQUES[id];
+  return { name: u.name, slot: u.slot, type: u.type, rarity: 3, level, stats: u.stats(level), affixes: [], unique: id };
+}
+
+const owns = (p, id) => [...Object.values(p.gear), ...p.inventory].some((it) => it && it.unique === id);
+const wears = (p, id) => Object.values(p.gear).some((it) => it && it.unique === id);
+const setCount = (p, id) => SLOTS.filter((k) => p.gear[k] && p.gear[k].set === id).length;
+const setActive = (p, id) => setCount(p, id) === 3;
+
+function maybeUnique(p, level) {
+  const left = Object.keys(UNIQUES).filter((id) => !owns(p, id));
+  return left.length ? makeUnique(pick(left), level) : null;
+}
+
+// What the pet compares when deciding to equip: raw power, plus a pull towards uniques and towards finishing a set.
+function gearScore(p, it) {
+  if (!it) return 0;
+  const others = it.set ? SLOTS.filter((k) => k !== it.slot && p.gear[k] && p.gear[k].set === it.set).length : 0;
+  return itemPower(it) + (it.unique ? 40 + it.level * 1.5 : 0) + (it.set ? 6 + it.level * 0.3 : 0) + others * (12 + it.level * 0.5) + (others === 2 ? 30 + it.level : 0);
 }
 
 function equip(p, it) {
   p.stats.items++;
   const cur = p.gear[it.slot];
-  if (!(cur && cur.locked) && itemPower(it) > itemPower(cur)) {
+  it.delta = Math.round(itemPower(it) - itemPower(cur));
+  if (!(cur && cur.locked) && gearScore(p, it) > gearScore(p, cur)) {
     p.gear[it.slot] = it;
     if (cur) p.inventory.unshift(cur);
     it.equipped = true;
@@ -749,7 +810,12 @@ function rollLoot(p, m) {
   const drops = [];
   const weights = m.boss ? [0, 35, 45, 20] : m.elite ? [25, 45, 23, 7] : [58, 29, 10, 3];
   const gearRolls = m.boss ? 2 : Math.random() < (m.elite ? 0.8 : 0.55) ? 1 : 0;
-  for (let i = 0; i < gearRolls; i++) drops.push(equip(p, makeItem(m.level, weights)));
+  for (let i = 0; i < gearRolls; i++) {
+    let it = makeItem(m.level, weights);
+    if (it.rarity === 3 && Math.random() < UNIQUE_CHANCE) it = maybeUnique(p, m.level) || it;
+    drops.push(equip(p, it));
+  }
+  if (m.boss && Math.random() < 0.03) { const u = maybeUnique(p, m.level); if (u) drops.push(equip(p, u)); }
   if (m.boss || Math.random() < 0.25) drops.push(rollConsumable(p));
   const r = Math.random();
   const box = m.boss ? (r < 0.2 ? 'mythic' : 'gold') : m.elite ? (r < 0.05 ? 'gold' : r < 0.4 ? 'iron' : null) : r < 0.003 ? 'gold' : r < 0.023 ? 'iron' : r < 0.1 ? 'wood' : null;
@@ -774,6 +840,11 @@ function shopStock(p) {
   stock.push({ kind: 'tome', tome: t, name: t.name, price: 120 + 15 * L });
   stock.push({ kind: 'box', id: 'iron', name: BOXES.iron.name, price: 60 + 8 * L });
   if (Math.random() < 0.5) stock.push({ kind: 'box', id: 'gold', name: BOXES.gold.name, price: 200 + 20 * L });
+  for (const it of Object.values(p.gear)) if (it && !it.unique && !it.locked && it.rarity < 4) stock.push({ kind: 'ascend', target: it, name: `Ascend ${it.name}`, price: Math.round(gearPrice(it) * (1 + it.rarity)) });
+  if (Math.random() < 0.15) {
+    const it = (Math.random() < 0.1 && maybeUnique(p, L)) || makeItem(L, [0, 0, 0, 1]);
+    stock.push({ kind: 'gear', item: it, name: it.name, price: Math.round(gearPrice(it) * 2.5 + (it.unique ? 300 + 20 * L : 0)), merchant: true });
+  }
   for (const it of Object.values(p.gear)) if (it && (it.plus || 0) < MAX_PLUS) stock.push({ kind: 'forge', target: it, name: `Reforge ${it.name}`, price: Math.round(gearPrice(it) * 0.5 * (1 + 0.25 * (it.plus || 0))) });
   return stock;
 }
@@ -808,13 +879,21 @@ function appraise(p, offer) {
     if (p.gold > offer.price * 4) return { value: ev, why: 'feeling lucky with a full wallet' };
     return null;
   }
+  if (offer.kind === 'ascend') {
+    const it = offer.target;
+    if (p.gear[it.slot] !== it) return null;
+    return { value: itemPower(it) * (RARITY[it.rarity + 1].mult / RARITY[it.rarity].mult - 1) * 0.6, why: `ascended ${it.name} from ${RARITY[it.rarity].name} to ${RARITY[it.rarity + 1].name}` };
+  }
   if (offer.kind === 'forge') {
     const it = offer.target;
     if (p.gear[it.slot] !== it) return null;
     return { value: itemPower(it) * 0.1, why: `reforged at the blacksmith to +${(it.plus || 0) + 1}` };
   }
   const it = offer.item, cur = p.gear[it.slot];
-  let gain = itemPower(it) - itemPower(cur), why = cur ? `+${Math.round(gain)} power over ${cur.name}` : `nothing in the ${it.slot} slot yet`;
+  let gain = gearScore(p, it) - gearScore(p, cur), why = cur ? `▲${Math.round(itemPower(it) - itemPower(cur))} power over ${cur.name}` : `nothing in the ${it.slot} slot yet`;
+  if (it.unique) why = `one of a kind: ${UNIQUES[it.unique].desc}`;
+  if (it.set && SLOTS.filter((k) => k !== it.slot && p.gear[k] && p.gear[k].set === it.set).length === 2) why = `completes the ${SETS[it.set].label} set: ${SETS[it.set].bonus}`;
+  if (offer.merchant) why += ' (from the Legendary Merchant)';
   if (it.element && common) {
     const k = MONSTERS[common[0]];
     if (k.weak === it.element) { gain += 4 + L * 0.4; why += ` — ${KIND_LABEL[common[0]]} keep showing up and they're weak to ${it.element}`; }
@@ -828,7 +907,10 @@ function appraise(p, offer) {
 function openBox(p, id) {
   const b = BOXES[id];
   const items = [];
-  for (let i = 0; i < b.items; i++) items.push(equip(p, makeItem(p.level, b.weights)));
+  for (let i = 0; i < b.items; i++) {
+    const u = id === 'mythic' && i === 0 && Math.random() < 0.25 ? maybeUnique(p, p.level) : null;
+    items.push(equip(p, u || makeItem(p.level, b.weights)));
+  }
   const gold = Math.round(rand(...b.gold) * (1 + p.level * 0.1));
   p.gold += gold;
   p.stats.goldEarned += gold;
@@ -859,6 +941,7 @@ function recentFoe(p) {
 
 function addElement(it, element) {
   it.element = element;
+  if (it.unique) return;
   it.name = `${pick(ELEMENTS[element].adj)} ${it.name.split(' ').slice(1).join(' ')}`;
 }
 
@@ -871,7 +954,7 @@ function craft(p) {
   for (let fused = true; fused;) {
     fused = false;
     const groups = {};
-    for (const it of p.inventory) if (it.rarity < 4) (groups[`${it.slot}:${it.rarity}`] ||= []).push(it);
+    for (const it of p.inventory) if (it.rarity < 4 && !it.unique) (groups[`${it.slot}:${it.rarity}`] ||= []).push(it);
     for (const parts of Object.values(groups)) {
       if (parts.length < 3) continue;
       const trio = parts.sort((a, b) => itemPower(b) - itemPower(a)).slice(0, 3);
@@ -934,19 +1017,21 @@ function visitTown(p) {
   const revived = p.faint > 0;
   p.faint = 0;
   p.hp = s.maxHp;
+  levelUniques(p);
   const opened = p.boxes.map((id) => openBox(p, id));
   p.boxes = [];
   if (opened.length) p.lastBoxes = { t: Date.now(), opened };
   craft(p);
   const groups = {};
   for (const it of p.inventory) (groups[`${it.slot}:${it.rarity}`] ||= []).push(it);
-  const kept = Object.values(groups).filter((g) => g[0].rarity >= 2 && g[0].rarity < 4 && g.length === 2).flat();
+  const kept = [...Object.values(groups).filter((g) => g[0].rarity >= 2 && g[0].rarity < 4 && g.length === 2 && !g[0].unique).flat(), ...p.inventory.filter((it) => it.unique)];
   let sold = 0;
   for (const it of p.inventory) if (!kept.includes(it)) sold += sellValue(it);
   const soldCount = p.inventory.length - kept.length;
   p.inventory = kept;
   p.gold += sold;
   const stock = shopStock(p);
+  if (stock.some((o) => o.merchant)) log(p, 'town', 'a Legendary Merchant is in town today');
   const bought = [];
   for (;;) {
     const minRatio = p.gold > 40 * p.level ? 0.012 : 0.03;
@@ -963,8 +1048,14 @@ function visitTown(p) {
     else if (o.kind === 'box') { o.sold = true; const res = openBox(p, o.id); p.lastBoxes = { t: Date.now(), opened: [...((p.lastBoxes && p.lastBoxes.t > Date.now() - 1000 && p.lastBoxes.opened) || []), res] }; }
     else if (o.kind === 'buff') { o.sold = true; p.buffs.push({ id: o.id, fights: 8 }); }
     else if (o.kind === 'forge') { o.sold = true; reforge(o.target, 1); }
+    else if (o.kind === 'ascend') {
+      o.sold = true;
+      const it = o.target, f = RARITY[it.rarity + 1].mult / RARITY[it.rarity].mult;
+      for (const k of Object.keys(it.stats)) it.stats[k] = k === 'maxHp' ? Math.round(it.stats[k] * f) : r2(it.stats[k] * f);
+      it.rarity++;
+    }
     else { o.sold = true; p.bonus[o.tome.stat] = r2((p.bonus[o.tome.stat] || 0) + o.tome.amt(p.level)); }
-    bought.push({ name: o.kind === 'forge' ? o.target.name : o.name, price: o.price, why: a.why, rarity: o.item ? o.item.rarity : o.target ? o.target.rarity : null });
+    bought.push({ name: o.kind === 'forge' || o.kind === 'ascend' ? o.target.name : o.name, price: o.price, why: a.why, rarity: o.item ? o.item.rarity : o.target ? o.target.rarity : null });
   }
   p.hp = petStats(p).maxHp;
   p.lastShop = { t: Date.now(), bought, sold, soldCount, gold: p.gold, stock: stock.map((o) => ({ name: o.name, price: o.price, rarity: o.item ? o.item.rarity : null, bought: !!o.sold })) };
@@ -1029,7 +1120,7 @@ function tick(p, bucket, event, ctx = {}) {
       log(p, 'boss', `🏅 ${p.name} defeated ${SECRET.name}! Badge earned: ${SECRET.name} Slayer · a Mythic Chest drops`);
     }
     lf.xp = Math.round((6 + 3 * m.level) * (m.boss ? 5 : m.elite ? 2 : 1));
-    lf.gold = Math.round((3 + 1.2 * m.level) * rand(0.7, 1.3) * (m.boss ? 5 : m.elite ? 2 : 1));
+    lf.gold = Math.round((3 + 1.2 * m.level) * rand(0.7, 1.3) * (m.boss ? 5 : m.elite ? 2 : 1) * (wears(p, 'prodkey') ? 2 : 1));
     p.gold += lf.gold;
     p.stats.goldEarned += lf.gold;
     gainXp(p, lf.xp);
@@ -1041,7 +1132,8 @@ function tick(p, bucket, event, ctx = {}) {
       log(p, 'evolve', `ARISE: ${m.name} rises as ${p.name}'s shadow soldier (${p.shadows}/3)`);
     }
     let text = `slew ${m.name} (Lv ${m.level}) +${lf.xp}xp +${lf.gold}g`;
-    for (const l of lf.loot) text += ` · ${l.equipped ? 'equipped' : 'found'} ${l.name}`;
+    for (const l of lf.loot) text += ` · ${l.equipped ? 'equipped' : 'found'} ${l.unique ? '★ ' : ''}${l.name}${l.delta != null && l.slot ? ` (${l.delta >= 0 ? '▲' : '▼'}${Math.abs(l.delta)})` : ''}`;
+    for (const l of lf.loot) if (l.unique) log(p, 'boss', `★ unique found: ${l.name}, ${UNIQUES[l.unique].desc}`);
     log(p, m.boss ? 'boss' : 'fight', text);
   } else if (f.result === 'loss') {
     if (m.boss && !m.secret) p.nextBoss = p.stats.kills + 10;
@@ -1441,6 +1533,8 @@ function roundInfo(name, m, r) {
     case 'afflict': return { text: `${E.icon} ${m.name} ${{ poison: 'poisons', frost: 'chills', fire: 'ignites' }[r.el]} ${name}!`, color: E.color, target: 'pet', tint: E.color };
     case 'shadow': return { text: `a shadow soldier strikes -${r.d}`, color: '#a66bff', target: 'mon', tint: '#a66bff' };
     case 'null': return { text: `${name}'s Null Gaze erases the attack`, color: '#c4a1ff', target: 'pet', tint: '#c4a1ff' };
+    case 'undo': return { text: `${name} hits Ctrl+Z and rewinds the killing blow!`, color: '#69f0ae', target: 'pet', tint: '#69f0ae' };
+    case 'shield': return { text: `the Architect shield absorbs the hit`, color: '#80cbc4', target: 'pet', tint: '#80cbc4' };
     case 'evade': return { text: `${name} evades!`, color: '#b388ff', target: 'pet', tint: '#b388ff' };
     case 'miss': return { text: `${m.name} dodges ${name}'s attack`, color: '#9e9e9e', lunge: 'pet' };
     case 'potion': return { text: `${name} drinks an Energy Drink!`, color: '#69f0ae', target: 'pet', tint: '#69f0ae' };
@@ -1751,8 +1845,8 @@ function draw(p, f, frame) {
       const chunk = SLOTS.slice(c, c + per);
       const icons = chunk.map((slot) => { const it = p.gear[slot]; return it ? renderPixels(iconPixels(iconKind(it), it.rarity, it.element, frame >> 2)) : []; });
       for (let r = 0; r < 8; r++) out.push(fit(' ' + icons.map((ls) => fit(ls[r] || '', 16) + '  ').join(''), W));
-      out.push(fit(' ' + chunk.map((slot) => { const it = p.gear[slot]; return fit(it ? color(RARITY[it.rarity].color, `${it.element ? `${ELEMENTS[it.element].icon} ` : ''}${it.name}`) : dim(`— no ${slot} —`), 16) + '  '; }).join(''), W));
-      out.push(fit(' ' + chunk.map((slot) => fit(p.gear[slot] ? dim(topStats(p.gear[slot])) : '', 16) + '  ').join(''), W));
+      out.push(fit(' ' + chunk.map((slot) => { const it = p.gear[slot]; return fit(it ? color(RARITY[it.rarity].color, `${it.unique ? '★ ' : it.set ? '◆ ' : it.element ? `${ELEMENTS[it.element].icon} ` : ''}${it.name}`) : dim(`— no ${slot} —`), 16) + '  '; }).join(''), W));
+      out.push(fit(' ' + chunk.map((slot) => fit(p.gear[slot] ? `${color('#d9d4ee', `PWR ${Math.round(itemPower(p.gear[slot]))}`)} ${dim(topStats(p.gear[slot]).split(' ').slice(0, 2).join(' '))}` : '', 16) + '  ').join(''), W));
     }
   } else {
     for (const slot of SLOTS) { const it = p.gear[slot]; out.push(fit(` ${dim(GEAR_ICON[slot])} ${it ? `${color(RARITY[it.rarity].color, it.name)} ${dim(topStats(it))}` : dim('—')}`, W)); }
@@ -1771,6 +1865,12 @@ function draw(p, f, frame) {
     ...(p.monarch ? [color('#a66bff', `🌑 shadow army ${p.shadows}/3`)] : []),
     ...(p.stage === 0 ? [dim('🥚 studying how you code (pet seed)')] : []),
   ];
+  for (const [id, st] of Object.entries(SETS)) {
+    const n = setCount(p, id);
+    if (n) active.push(n === 3 ? color('#80cbc4', `◆ ${st.label} set: ${st.bonus}`) : dim(`◆ ${st.label} set ${n}/3`));
+  }
+  for (const it of Object.values(p.gear)) if (it && it.unique) active.push(color('#ffb300', `★ ${UNIQUES[it.unique].desc}`));
+  if ((p.badges || []).length) active.push(color('#ffd54f', '🏅 +5% XP forever'));
   if (!active.length) active.push(dim('no buffs right now'));
   if (W >= 74) {
     for (let i = 0; i < Math.max(statRows.length, active.length); i++) out.push(fit(fit(statRows[i] || '', 36) + color('#3a3650', '│ ') + (active[i] || ''), W));
@@ -1838,6 +1938,35 @@ function sim(n, bucket) {
   for (let i = 0; i < n; i++) withLock((p) => tick(p, bucket || pick(buckets), 'tick'));
   const p = load();
   console.log(`${emoji(p)} ${p.name} ${formName(p)} Lv${p.level} kills=${p.stats.kills} faints=${p.stats.faints} bosses=${p.stats.bosses} items=${p.stats.items}`);
+}
+
+function gearPanel() {
+  const p = load();
+  if (!p) return console.log('No pet yet. It hatches from your next Claude Code tool call.');
+  const dim = (t) => color('#8a849f', t);
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  const fmt = ([k, v]) => (['crit', 'lifesteal', 'regen', 'resist', 'thorns', 'multi'].includes(k) ? `+${pct(v)} ${k}` : `${v < 0 ? '' : '+'}${Math.round(v)} ${{ def: 'armor', maxHp: 'HP', evasion: 'evasion', atk: 'ATK', spd: 'SPD' }[k] || k}`);
+  console.log(`${color('#ffd700', '✦')} ${color('#ffffff', `\x1b[1m${p.name}'s gear`)} ${dim(`· drawn on the pet: ${loadConfig().gear === false ? 'off' : 'on'} (pet gear on|off)`)}\n`);
+  for (const slot of SLOTS) {
+    const it = p.gear[slot];
+    const icon = it ? renderPixels(iconPixels(iconKind(it), it.rarity, it.element)) : Array(8).fill('');
+    const card = it ? [
+      color(RARITY[it.rarity].color, `\x1b[1m${it.unique ? '★ ' : it.set ? '◆ ' : ''}${it.name}`),
+      dim(`${RARITY[it.rarity].name} ${it.type || slot}${it.element ? ` · ${ELEMENTS[it.element].icon} ${it.element}` : ''} · Lv ${it.level} · PWR ${Math.round(itemPower(it))}`),
+      Object.entries(it.stats).map(fmt).join(' · '),
+      ...(it.affixes && it.affixes.length ? [dim(it.affixes.join(' · '))] : []),
+      ...(it.unique ? [color('#ffb300', `★ ${UNIQUES[it.unique].desc}`)] : []),
+      ...(it.set ? [color('#80cbc4', `◆ ${SETS[it.set].label} set ${setCount(p, it.set)}/3: ${SETS[it.set].bonus}`)] : []),
+    ] : [dim(`— no ${slot} —`)];
+    for (let r = 0; r < 8; r++) console.log(`${fit(icon[r] || '', 16)}  ${card[r] || ''}`);
+  }
+  if (p.inventory.length) {
+    console.log(`\n${dim('bag')}`);
+    for (const it of p.inventory) {
+      const cur = p.gear[it.slot], d = Math.round(itemPower(it) - itemPower(cur));
+      console.log(`  ${color(RARITY[it.rarity].color, `${it.unique ? '★ ' : it.set ? '◆ ' : ''}${it.name}`)} ${dim(`PWR ${Math.round(itemPower(it))}`)} ${d >= 0 ? color('#69f0ae', `▲${d}`) : color('#ff8a80', `▼${-d}`)}`);
+    }
+  }
 }
 
 function seedInfo() {
@@ -1934,8 +2063,10 @@ try {
     console.log(`statusline mode: ${statusMode(loadConfig())}  (full = sprite + stats card, minimal = pet only on the far right, compact = 2 text lines)`);
   }
   else if (cmd === 'gear') {
-    if (args[0] === 'on' || args[0] === 'off') setConfig('gear', args[0] === 'on');
-    console.log(`gear on the pet: ${loadConfig().gear === false ? 'hidden (still equipped and listed in the card)' : 'shown'}`);
+    if (args[0] === 'on' || args[0] === 'off') {
+      setConfig('gear', args[0] === 'on');
+      console.log(`gear on the pet: ${loadConfig().gear === false ? 'hidden (still equipped and listed in the card)' : 'shown'}`);
+    } else gearPanel();
   }
   else if (cmd === 'sprite') { setConfig('mode', args[0] === 'off' ? 'compact' : 'full'); console.log(`statusline mode: ${statusMode(loadConfig())}`); }
   else if (cmd === 'width') {
@@ -1945,7 +2076,7 @@ try {
   else if (cmd === 'install') install();
   else if (cmd === 'uninstall') uninstall();
   else if (cmd === 'reset') { fs.rmSync(STATE, { force: true }); console.log('Pet released into the wild.'); }
-  else console.log('usage: pet [watch|status|seed|gear on|off|mode full|minimal|compact|width <n|auto>|install|uninstall|sim <n> [bucket]|reset]');
+  else console.log('usage: pet [watch|status|seed|gear [on|off]|mode full|minimal|compact|width <n|auto>|install|uninstall|sim <n> [bucket]|reset]');
 } catch (e) {
   if (cmd !== 'hook' && cmd !== 'statusline') throw e;
 }
