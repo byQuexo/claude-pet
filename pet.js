@@ -1591,17 +1591,15 @@ function spriteCard(p) {
     return t + ' '.repeat(Math.max(0, n - (it ? Math.min(n, it.name.length) : 1)));
   };
   const e = p.log[p.log.length - 1];
-  const lean = leaning(p), next = STAGE_LEVELS[p.stage + 1];
+  const tag = p.monarch ? color('#a66bff', ` 🌑 ${p.shadows}/3`) : '';
+  // Exactly as tall as the sprite, so nothing hangs below the pet.
   const card = [
-    `${color('#ffffff', `\x1b[1m${p.name}`)}${badgeMark(p)} ${dim(formName(p))} ${color('#ffd700', `Lv${p.level}`)} ${buffLine(p)}`,
-    `${color('#e53935', '♥')} ${bar(hpF, 16, hpColor(hpF), '#3a3a3a', ['▰', '▱'])} ${dim(`${p.hp}/${s.maxHp}`)}`,
-    `${color('#4fa3ff', '✦')} ${bar(p.xp / need, 16, '#4fa3ff', '#3a3a3a', ['▰', '▱'])} ${dim(`${p.xp}/${need}`)}`,
+    `${color('#ffffff', `\x1b[1m${p.name}`)}${badgeMark(p)} ${dim(formName(p))} ${color('#ffd700', `Lv${p.level}`)}${tag} ${buffLine(p)}`,
+    `${color('#e53935', '♥')} ${bar(hpF, 12, hpColor(hpF), '#3a3a3a', ['▰', '▱'])} ${dim(`${p.hp}/${s.maxHp}`)}  ${color('#4fa3ff', '✦')} ${bar(p.xp / need, 12, '#4fa3ff', '#3a3a3a', ['▰', '▱'])} ${dim(`${p.xp}/${need}`)}`,
     statLine(s, dim, p.level),
-    `${gear('weapon', 24)}  ${gear('armor', 24)}`,
-    `${gear('helmet', 24)}  ${gear('boots', 24)}`,
-    gear('charm', 24),
-    p.faint > 0 ? dim(`💤 fainted — back in ${p.faint} ticks`) : e ? dim(short(`${e.text} · ${ago(e.t)}`, 52)) : dim('patrolling the codebase…'),
-    next ? dim(`✨ Lv${next}${lean && p.stage >= 1 ? ` · ${p.stage === 1 ? 'class' : 'trait'} forming: ${BRANCHES[lean.branch].cls}` : p.stage === 0 ? ' · the egg is studying how you code' : ''}`) : dim(p.monarch ? `🌑 Monarch of Shadows · ${p.shadows}/3 shadows` : '👑 final form'),
+    `${gear('weapon', 22)}  ${gear('armor', 22)}`,
+    `${gear('helmet', 22)}  ${gear('boots', 22)}  ${gear('charm', 18)}`,
+    p.faint > 0 ? dim(`💤 fainted, back in ${p.faint} ticks`) : e ? dim(short(`${e.text} · ${ago(e.t)}`, 60)) : dim('patrolling the codebase…'),
   ];
   const rows = Math.max(sprite.length, card.length);
   const out = [];
