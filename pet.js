@@ -1496,10 +1496,16 @@ function cellWidth(str) {
   return w;
 }
 
+const STATUS_PET = 12;
+
+// The statusline draws a 12-pixel pet at a fixed 6 rows: moving it would change the row count and jolt the whole bar,
+// so it animates only through a glow pulse, blinking and flicker.
 function petSprite(p) {
   const beat = Math.floor(Date.now() / 1000);
-  return renderSprite(composePet(formOf(p), p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0, t: beat }), { dy: beat % 2 ? 0 : -1, gray: p.faint > 0 })
-    .filter((l) => /[▀▄]/.test(l));
+  const glow = { fire: '#ffb347', spark: '#ffe14d', void: '#c4a1ff', monarch: '#a66bff' }[fxOf(formOf(p))];
+  const pix = spritePixels(composePet(formOf(p), p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0, t: beat }), { gray: p.faint > 0, tint: glow && beat % 2 ? glow : null, amount: 0.14 }).slice(1, 17);
+  const n = STATUS_PET;
+  return renderPixels(Array.from({ length: n }, (_, y) => Array.from({ length: n }, (_, x) => pix[Math.floor(((y + 0.5) * 16) / n)][Math.floor(((x + 0.5) * 16) / n)])));
 }
 
 // COLUMNS is the full terminal width, but Claude Code pads the statusline and cuts longer lines with "…",
@@ -1507,7 +1513,7 @@ function petSprite(p) {
 const STATUS_MARGIN = 6;
 function besideRight(left, sprite, cfg) {
   const width = cfg.width || parseInt(process.env.COLUMNS, 10) || 80;
-  const col = width - 16 - STATUS_MARGIN;
+  const col = width - STATUS_PET - STATUS_MARGIN;
   const start = left.slice(0, sprite.length).some((l) => cellWidth(l) >= col) ? left.length : 0;
   const out = [];
   for (let i = 0; i < Math.max(left.length, start + sprite.length); i++) {
@@ -1577,10 +1583,7 @@ function setConfig(key, value) {
 function spriteCard(p) {
   const s = petStats(p), need = xpToNext(p.level), hpF = p.hp / s.maxHp;
   const dim = (t) => color('#8a8a8a', t);
-  // Redraws are event-driven, so the clock picks a bob/blink frame instead of a timer.
-  const beat = Math.floor(Date.now() / 1000);
-  const sprite = renderSprite(composePet(formOf(p), p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0, t: beat }), { dy: beat % 2 ? 0 : -1, gray: p.faint > 0 })
-    .filter((l) => /[▀▄]/.test(l));
+  const sprite = petSprite(p);
   const gear = (slot, n) => {
     const it = p.gear[slot];
     const icon = it && it.element ? ELEMENTS[it.element].icon : GEAR_ICON[slot];
@@ -1602,7 +1605,7 @@ function spriteCard(p) {
   ];
   const rows = Math.max(sprite.length, card.length);
   const out = [];
-  for (let i = 0; i < rows; i++) out.push(`${sprite[i] || ' '.repeat(16)}  ${card[i] || ''}`);
+  for (let i = 0; i < rows; i++) out.push(`${sprite[i] || ' '.repeat(STATUS_PET)}  ${card[i] || ''}`);
   return out;
 }
 
