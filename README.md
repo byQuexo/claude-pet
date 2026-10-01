@@ -2,6 +2,10 @@
 
 An idle RPG pet that lives in your [Claude Code](https://claude.com/claude-code) statusline. While you code, monsters spawn, and your pet fights them, loots gear, shops, crafts and evolves. You never press a button; it plays itself.
 
+![pet watch, mid-fight: a Nullwraith with a unique Production Key against a Tech Debt Colossus boss](docs/watch.svg)
+
+*`pet watch` in a terminal split, captured from a real save mid-boss-fight.*
+
 ![Every sprite in the game](docs/sprites.png)
 
 *Top: the egg, the Fire, Lightning and Void starter lines, and the 1% Demon King with its Abyssal Scythe. Bottom: all 11 regular monsters, the loot crate and the crafting anvil. Rendered from the game's own sprite code. One more is out there, at 1 in 1000.*
