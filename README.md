@@ -10,6 +10,8 @@ An idle RPG pet that lives in your [Claude Code](https://claude.com/claude-code)
 
 *Top: the egg, the Fire, Lightning and Void starter lines, and the 1% Demon King with its Abyssal Scythe. Bottom: all 11 regular monsters, the loot crate and the crafting anvil. Rendered from the game's own sprite code. One more is out there, at 1 in 1000.*
 
+📖 **[Wiki](docs/WIKI.md):** every item, monster, drop rate, nature, shiny and formula, generated from the code.
+
 ## Install
 
 Requires Node 18+, Claude Code, and a terminal with truecolor and Unicode block characters (Ghostty, iTerm2, WezTerm, Kitty, Alacritty, recent macOS Terminal).
@@ -90,6 +92,8 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
 | `pet install` / `uninstall` | wire into, or remove from, Claude Code settings |
 | `pet sim <n> [bash\|edit\|read\|fail\|agent]` | fast-forward n ticks (this cheats your own save) |
 | `pet reset` | release your pet and start over |
+
+The [wiki](docs/WIKI.md) is rebuilt with `node tools/wiki.js` after any balance change.
 
 ## System load
 
