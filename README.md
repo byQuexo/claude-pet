@@ -2,9 +2,9 @@
 
 An idle RPG pet that lives in your [Claude Code](https://claude.com/claude-code) statusline. While you code, monsters spawn, and your pet fights them, loots gear, shops, crafts and evolves. You never press a button; it plays itself.
 
-![sprites](docs/sprites.png)
+![Every sprite in the game](docs/sprites.png)
 
-![starters](docs/starters.png)
+*Top: the egg, the Fire, Lightning and Void starter lines, and the 1% Demon King. Bottom: all 11 monsters, the loot crate and the crafting anvil. Rendered from the game's own sprite code.*
 
 ## Install
 
