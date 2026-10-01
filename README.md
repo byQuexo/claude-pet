@@ -44,7 +44,7 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
   - Weapon types: sword, axe, dagger, staff.
   - Elements: 🔥 fire, ☠ poison, ❄ frost, ⚡ lightning.
   - Affixes such as lifesteal, thorns, regeneration, warding and shadows.
-- **A secret boss:** any fight has a 1-in-1000 chance of being something else entirely. It's tougher than any boss and can't be fled. Beat it once and you keep a 🏅 badge forever, next to your pet's name. To make it your own, drop a `secret-boss.json` (`{ "name", "pal", "rows" }`, 16 rows of 16 chars) into `~/.claude/claude-pet/` and it replaces the default art and name.
+- **A secret boss:** any fight has a 1-in-1000 chance of being something else entirely. It's tougher than any boss and can't be fled. Beat it once and you keep a 🏅 badge forever, next to your pet's name.
 - **Combat:** armor reduces damage, and evasion rating gives a chance to dodge, with diminishing returns. Monsters have elemental weaknesses and resistances, and some poison, chill or burn your pet. The pet drinks potions when it's low, retreats from fights it's losing, and picks safer fights after a losing streak.
 - **Town:** every 10 fights the pet fully heals, opens loot crates, crafts, sells leftovers and shops. It decides what to buy from its situation (low on potions, a boss due soon, an empty gear slot, which monsters keep showing up) and logs why.
 - **Crafting:** the pet does this on its own.

@@ -378,27 +378,27 @@ const GEAR_ANCHORS = {
   sovereign: { head: null, hand: { x: 14, y: 8 }, chest: { x0: 4, x1: 11, y0: 8, y1: 11, body: true }, neck: { x: 7, y: 7 }, feet: false },
 };
 
-// Ships as a hooded silhouette; a local secret-boss.json in the pet's home dir can replace its name and art.
+// The 1-in-1000 secret boss. A local secret-boss.json in the pet's home dir can still override name and art.
 const SECRET_BOSS = {
   name: 'The Secret Boss',
-  pal: { o: '#0a0a0a', b: '#1a1a22', y: '#ffd54f' },
+  pal: { o: '#2a1e18', H: '#d8c69a', h: '#b09a70', j: '#7a6648', s: '#f2cdb0', S: '#dba88a', w: '#ffffff', e: '#3e5468', b: '#8a7050', m: '#c46a6a', B: '#c9a77e', t: '#d6e4ec', T: '#a8bccb' },
   rows: [
-    '................',
-    '.....oooooo.....',
-    '....obbbbbbo....',
-    '...obbbbbbbbo...',
-    '...obbyyybbbo...',
-    '...obbbbbybbo...',
-    '...obbbbybbbo...',
-    '...obbbybbbbo...',
-    '...obbbbbbbbo...',
-    '...obbbybbbbo...',
-    '..obbbbbbbbbbo..',
-    '.obbbbbbbbbbbbo.',
-    '.obbbbbbbbbbbbo.',
-    'obbbbbbbbbbbbbbo',
-    'oooooooooooooooo',
-    '................',
+    '....oHhoHhHo....',
+    '..ohHHhHHjHHo...',
+    '.ohHjHHhHHjHHho.',
+    '.ojHHssssssHHjo.',
+    '.ojHsssssssssjo.',
+    'ojHsbbbsssbbbsHo',
+    'osssweSssSewssso',
+    '.osssssSSsssssso',
+    '.oSssssssssssSo.',
+    '.oBsssmmmmsssBo.',
+    '..oBBssssssBBo..',
+    '...oBBBBBBBBo...',
+    '..ottTSSSSTtto..',
+    '.otttTTSSTTttto.',
+    'otttttttttttttto',
+    'oTTTTTTTTTTTTTTo',
   ],
 };
 
