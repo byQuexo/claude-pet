@@ -738,12 +738,12 @@ function makeItem(level, weights, forced = {}) {
   return { name, slot, type, element, rarity: ri, level, stats, affixes: affixes.map((a) => a.name), set };
 }
 
-// Uniques grow with the pet, so a lucky early drop stays worth wearing.
+// Uniques and the locked Abyssal Scythe grow with the pet, so neither falls behind its level.
 function levelUniques(p) {
   for (const it of [...Object.values(p.gear), ...p.inventory]) {
-    if (!it || !it.unique || it.level >= p.level) continue;
+    if (!it || !(it.unique || it.locked) || it.level >= p.level) continue;
     it.level = p.level;
-    it.stats = UNIQUES[it.unique].stats(p.level);
+    it.stats = it.unique ? UNIQUES[it.unique].stats(p.level) : makeAbyssalScythe(p.level).stats;
     const f = Math.pow(1.1, it.plus || 0);
     for (const k of Object.keys(it.stats)) if (k !== 'multi' && k !== 'thorns') it.stats[k] = k === 'maxHp' ? Math.round(it.stats[k] * f) : r2(it.stats[k] * f);
   }
