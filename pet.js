@@ -1318,6 +1318,7 @@ function composePet(form, p, opts = {}) {
   if (fx === 'fire' && t % 2) [pal.f, pal.r] = [pal.r, pal.f];
   if (fx === 'monarch') { if (t % 2) { pal.p = '#d9b8ff'; pal.x = '#ff2a2a'; } if (t % 3 === 0) { pal.e = '#7fe3ff'; pal.q = '#ffb347'; } }
   if (form.stage >= 1 && p && loadConfig().gear !== false) dressPet(grid, pal, key, p.gear, opts);
+  if (opts.glint) for (const k of ['e', 'y', 'f', 'r', 'g', 'p', 'x', 'q', 'E']) if (pal[k]) pal[k] = mixHex(pal[k], '#ffffff', 0.35);
   if (opts.blink) for (const row of grid) for (let c = 0; c < 16; c++) if (row[c] === 'e' || row[c] === 'w') row[c] = 'b';
   return { grid, pal };
 }
@@ -1499,11 +1500,10 @@ function cellWidth(str) {
 const STATUS_PET = 12;
 
 // The statusline draws a 12-pixel pet at a fixed 6 rows: moving it would change the row count and jolt the whole bar,
-// so it animates only through a glow pulse, blinking and flicker.
+// so only eyes, flames and other accents glint while the body stays still.
 function petSprite(p) {
   const beat = Math.floor(Date.now() / 1000);
-  const glow = { fire: '#ffb347', spark: '#ffe14d', void: '#c4a1ff', monarch: '#a66bff' }[fxOf(formOf(p))];
-  const pix = spritePixels(composePet(formOf(p), p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0, t: beat }), { gray: p.faint > 0, tint: glow && beat % 2 ? glow : null, amount: 0.14 }).slice(1, 17);
+  const pix = spritePixels(composePet(formOf(p), p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0, t: beat, glint: beat % 2 === 0 }), { gray: p.faint > 0 }).slice(1, 17);
   const n = STATUS_PET;
   return renderPixels(Array.from({ length: n }, (_, y) => Array.from({ length: n }, (_, x) => pix[Math.floor(((y + 0.5) * 16) / n)][Math.floor(((x + 0.5) * 16) / n)])));
 }
