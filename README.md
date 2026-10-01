@@ -4,7 +4,7 @@ An idle RPG pet that lives in your [Claude Code](https://claude.com/claude-code)
 
 ![Every sprite in the game](docs/sprites.png)
 
-*Top: the egg, the Fire, Lightning and Void starter lines, and the 1% Demon King. Bottom: all 11 monsters, the loot crate and the crafting anvil. Rendered from the game's own sprite code.*
+*Top: the egg, the Fire, Lightning and Void starter lines, and the 1% Demon King with its Abyssal Scythe. Bottom: all 11 regular monsters, the loot crate and the crafting anvil. Rendered from the game's own sprite code. One more is out there, at 1 in 1000.*
 
 ## Install
 
@@ -40,10 +40,13 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
   | 🌑 Void | Glitchling → Nullwraith → Void Sovereign | Null Gaze: 20% chance to erase an enemy attack |
 - **Class:** at Lv 15, whatever you do **more than you usually do** sets the pet's class, which tints its markings and gives a stat bonus. Bash → Shell, edits → Scribe, reads → Seeker, failures → Chaos, subagents → Hive.
 - **The Demon King:** at the Lv 30 evolution (and again at Lv 40), a pet has a 1% chance to rise as the Monarch of Shadows instead. It wields the Abyssal Scythe, a demon-tier black scythe with a crimson edge that burns with shadow flame on every hit. Monsters it slays can rise again as shadow soldiers, up to 3, which strike at the start of every fight.
-- **Loot:** 5 gear slots and 5 rarities. The top rarity, Mythic, can only be crafted.
+- **Loot:** 5 gear slots (weapon, armor, helmet, boots, charm) and 6 rarities: common, rare, epic, legendary, mythic (crafting only) and demon (the Demon King's scythe only).
   - Weapon types: sword, axe, dagger, staff.
   - Elements: 🔥 fire, ☠ poison, ❄ frost, ⚡ lightning.
   - Affixes such as lifesteal, thorns, regeneration, warding and shadows.
+- **Gear is drawn on the pet:** each form has anchor points for its head, hand, chest, neck and feet. Weapons are held in the element's colour, helmets get a plume at epic and up, armor is a breastplate in the rarity's material (iron to obsidian), boots recolour the feet, and charms hang at the neck. `pet gear off` hides it.
+
+  ![Every form in common, epic, legendary and mythic gear](docs/gear.png)
 - **A secret boss:** any fight has a 1-in-1000 chance of being something else entirely. It's tougher than any boss and can't be fled. Beat it once and you keep a 🏅 badge forever, next to your pet's name.
 - **Combat:** armor reduces damage, and evasion rating gives a chance to dodge, with diminishing returns. Monsters have elemental weaknesses and resistances, and some poison, chill or burn your pet. The pet drinks potions when it's low, retreats from fights it's losing, and picks safer fights after a losing streak.
 - **Town:** every 10 fights the pet fully heals, opens loot crates, crafts, sells leftovers and shops. It decides what to buy from its situation (low on potions, a boss due soon, an empty gear slot, which monsters keep showing up) and logs why.
@@ -64,6 +67,7 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
 |---|---|
 | `pet watch` | animated full view |
 | `pet status` | print the statusline card once |
+| `pet seed` | what the egg has observed so far, or the seed and what it decided |
 | `pet mode full` / `minimal` / `compact` | full: sprite + stats card · minimal: only the pet, far right, beside your statusline · compact: 2 text lines |
 | `pet gear on` / `off` | show or hide gear drawn on the pet (it stays equipped and listed in the card) |
 | `pet width <n>` / `auto` | terminal width for minimal mode, if `$COLUMNS` is wrong |
@@ -73,7 +77,7 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
 
 ## Privacy
 
-Everything stays on your machine. The pet only reads hook payloads (tool name, and the Bash command for the coding events), and its save is a single JSON file in `~/.claude/claude-pet/`. It makes no network calls.
+Everything stays on your machine. The pet only reads hook payloads: the tool name, the Bash command (for the coding events), and while it's an egg, the file extension you edit and a hash of the working directory. Its save is a single JSON file in `~/.claude/claude-pet/`. It makes no network calls.
 
 ## License
 
