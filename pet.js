@@ -1156,10 +1156,52 @@ function statusline() {
   if (cfg.inner) {
     try { inner = execFileSync('/bin/sh', ['-c', cfg.inner], { input, encoding: 'utf8', timeout: 4000, stdio: ['pipe', 'pipe', 'ignore'] }); } catch (e) { inner = e.stdout || ''; }
   }
-  if (inner) process.stdout.write(inner.endsWith('\n') ? inner : inner + '\n');
+  const innerLines = inner ? inner.replace(/\n$/, '').split('\n') : [];
   const p = load();
-  if (!p) { process.stdout.write(`🥚 ${color('#888888', 'a pet egg will appear after your next tool call')}\n`); return; }
-  process.stdout.write((cfg.sprite ? spriteCard(p) : statusLines(p)).join('\n') + '\n');
+  const mode = statusMode(cfg);
+  if (!p) {
+    process.stdout.write([...innerLines, `🥚 ${color('#888888', 'a pet egg will appear after your next tool call')}`].join('\n') + '\n');
+    return;
+  }
+  const lines = mode === 'minimal' ? besideRight(innerLines, petSprite(p), cfg) : [...innerLines, ...(mode === 'compact' ? statusLines(p) : spriteCard(p))];
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+const MODES = ['full', 'minimal', 'compact'];
+const statusMode = (cfg) => (MODES.includes(cfg.mode) ? cfg.mode : cfg.sprite === false ? 'compact' : 'full');
+const ANSI_RE = /\x1b\[[0-9;?]*[a-zA-Z]/g;
+
+function cellWidth(str) {
+  let w = 0;
+  for (const ch of str.replace(ANSI_RE, '')) {
+    const c = ch.codePointAt(0);
+    if (c === 0xfe0f || c === 0x200d) continue;
+    const wide = (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) || (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff)
+      || (c >= 0xff00 && c <= 0xff60) || (c >= 0xffe0 && c <= 0xffe6) || (c >= 0x1f300 && c <= 0x1faff);
+    w += wide ? 2 : 1;
+  }
+  return w;
+}
+
+function petSprite(p) {
+  const beat = Math.floor(Date.now() / 1000);
+  return renderSprite(composePet(p, p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0 }), { dy: beat % 2 ? 0 : -1, gray: p.faint > 0 })
+    .filter((l) => /[▀▄]/.test(l));
+}
+
+// The statusline gets no terminal size, so COLUMNS (or `pet width`) decides where "far right" is.
+function besideRight(left, sprite, cfg) {
+  const width = cfg.width || parseInt(process.env.COLUMNS, 10) || 80;
+  const col = width - 16 - 2;
+  const start = left.slice(0, sprite.length).some((l) => cellWidth(l) >= col) ? left.length : 0;
+  const out = [];
+  for (let i = 0; i < Math.max(left.length, start + sprite.length); i++) {
+    const l = left[i] || '';
+    const row = sprite[i - start];
+    // A leading reset keeps the renderer from trimming the alignment spaces away.
+    out.push(row == null ? l : `${l}\x1b[0m${' '.repeat(Math.max(1, col - cellWidth(l)))}${row}`);
+  }
+  return out;
 }
 
 const lootOf = (lf) => (Array.isArray(lf.loot) ? lf.loot : lf.loot ? [lf.loot] : []);
@@ -1258,7 +1300,8 @@ function statusLines(p) {
   else {
     const e = p.log[p.log.length - 1];
     const icon = { fight: '⚔', boss: '💀', faint: '💤', level: '⬆', evolve: '✨', wake: '☀', flee: '💨', town: '🏘', shop: '🛒', box: '🎁', craft: '⚒', code: '⌨' }[e && e.type] || '·';
-    l2 = e ? `  ${icon} ${dim(e.text)} ${color('#5a5a5a', ago(e.t))}` : `  ${dim('· patrolling the codebase…')}`;
+    const room = (parseInt(process.env.COLUMNS, 10) || 80) - 16;
+    l2 = e ? `  ${icon} ${dim(short(e.text, room))} ${color('#5a5a5a', ago(e.t))}` : `  ${dim('· patrolling the codebase…')}`;
   }
   return [l1, l2];
 }
@@ -1538,11 +1581,20 @@ try {
   else if (cmd === 'watch' || !cmd) watch();
   else if (cmd === 'status') status();
   else if (cmd === 'sim') sim(parseInt(args[0] || '100', 10), args[1]);
-  else if (cmd === 'sprite') { setConfig('sprite', args[0] !== 'off'); console.log(`statusline sprite ${args[0] === 'off' ? 'off' : 'on'}`); }
+  else if (cmd === 'mode') {
+    if (MODES.includes(args[0])) setConfig('mode', args[0]);
+    else if (args[0]) { console.log(`unknown mode "${args[0]}" — use ${MODES.join(', ')}`); process.exitCode = 1; }
+    console.log(`statusline mode: ${statusMode(loadConfig())}  (full = sprite + stats card, minimal = pet only on the far right, compact = 2 text lines)`);
+  }
+  else if (cmd === 'sprite') { setConfig('mode', args[0] === 'off' ? 'compact' : 'full'); console.log(`statusline mode: ${statusMode(loadConfig())}`); }
+  else if (cmd === 'width') {
+    setConfig('width', args[0] && args[0] !== 'auto' ? parseInt(args[0], 10) : undefined);
+    console.log(`statusline width: ${loadConfig().width || `auto (COLUMNS=${process.env.COLUMNS || 'unset'}, else 80)`}`);
+  }
   else if (cmd === 'install') install();
   else if (cmd === 'uninstall') uninstall();
   else if (cmd === 'reset') { fs.rmSync(STATE, { force: true }); console.log('Pet released into the wild.'); }
-  else console.log('usage: pet [watch|status|install|uninstall|sprite on|off|sim <n> [bucket]|reset]');
+  else console.log('usage: pet [watch|status|mode full|minimal|compact|width <n|auto>|install|uninstall|sim <n> [bucket]|reset]');
 } catch (e) {
   if (cmd !== 'hook' && cmd !== 'statusline') throw e;
 }
