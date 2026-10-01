@@ -775,6 +775,9 @@ function equip(p, it) {
   p.stats.items++;
   const cur = p.gear[it.slot];
   it.delta = Math.round(itemPower(it) - itemPower(cur));
+  it.cmp = cur ? { name: cur.name, stats: { ...cur.stats }, power: Math.round(itemPower(cur)), affixes: [...(cur.affixes || [])] } : null;
+  const foe = recentFoe(p);
+  if (it.element && foe && MONSTERS[foe].weak === it.element) it.hint = `${ELEMENTS[it.element].icon} hits deal ${wears(p, 'insight') ? 2 : 1.5}× to ${KIND_LABEL[foe]} (weak to ${ELEMENTS[it.element].icon})`;
   if (!(cur && cur.locked) && gearScore(p, it) > gearScore(p, cur)) {
     p.gear[it.slot] = it;
     if (cur) p.inventory.unshift(cur);
@@ -917,7 +920,7 @@ function openBox(p, id) {
   const extras = [];
   for (let i = 0; i < b.extras; i++) extras.push(rollConsumable(p));
   if (id === 'mythic') { gainXp(p, xpToNext(p.level) - p.xp); extras.push({ name: 'Senior Dev Mentorship (+1 Lv)' }); const t = pick(TOMES); p.bonus[t.stat] = r2((p.bonus[t.stat] || 0) + t.amt(p.level)); extras.push({ name: `${t.name} (forever)` }); }
-  const contents = [...items.map((it) => ({ name: it.name, rarity: it.rarity, equipped: !!it.equipped })), ...extras.map((e) => ({ name: e.name })), { name: `${gold} gold` }];
+  const contents = [...items.map((it) => ({ name: it.name, rarity: it.rarity, equipped: !!it.equipped, item: it })), ...extras.map((e) => ({ name: e.name })), { name: `${gold} gold` }];
   log(p, 'box', `opened ${/^[AEIOU]/.test(b.name) ? 'an' : 'a'} ${b.name}: ${contents.map((c) => c.name).join(', ')}`);
   return { id, contents };
 }
@@ -1660,7 +1663,9 @@ function fightFrames(lf, name) {
   if (lf.result === 'win') for (const d of [0.25, 0.5, 0.75]) frames.push(base({ dissolve: d, caption: label }));
   if (lf.arise) for (let i = 0; i < 10; i++) frames.push(base({ monGone: true, caption: ['A R I S E', '#a66bff'] }));
   if (lf.badge) for (let i = 0; i < 16; i++) frames.push(base({ monGone: true, caption: [`🏅 BADGE EARNED: ${m.name} Slayer 🏅`, '#ffd54f'] }));
-  for (let i = 0; i < 14; i++) frames.push(base(end));
+  const drop = loot.filter((l) => l.slot).sort((a, b) => (b.equipped ? 1 : 0) - (a.equipped ? 1 : 0) || b.rarity - a.rarity)[0];
+  for (let i = 0; i < (drop ? 5 : 14); i++) frames.push(base(end));
+  if (drop) for (let i = 0; i < 22; i++) frames.push(base({ ...end, card: drop, cardTitle: `victory · +${lf.xp} XP · +${lf.gold || 0}g` }));
   return frames;
 }
 
@@ -1698,7 +1703,10 @@ function boxFrames(lb) {
     const title = [`${BOXES[id].name}!`, BOXES[id].color];
     for (let i = 0; i < 8; i++) frames.push({ chest: { id, open: false, dx: i % 2 ? 1 : -1 }, caption: title });
     for (let i = 0; i < 3; i++) frames.push({ chest: { id, open: true }, chestFlash: 0.7 - i * 0.2, caption: title });
-    for (const c of contents) for (let i = 0; i < 6; i++) frames.push({ chest: { id, open: true }, caption: [`${c.equipped ? '★ equipped ' : ''}${c.name}`, c.rarity != null ? RARITY[c.rarity].color : '#ffd54f'] });
+    for (const c of contents) {
+      for (let i = 0; i < 6; i++) frames.push({ chest: { id, open: true }, caption: [`${c.equipped ? '★ equipped ' : ''}${c.name}`, c.rarity != null ? RARITY[c.rarity].color : '#ffd54f'] });
+      if (c.item && c.item.slot) for (let i = 0; i < 16; i++) frames.push({ card: c.item, cardTitle: `from the ${BOXES[id].name}`, caption: [`${c.name}`, RARITY[c.item.rarity].color] });
+    }
   }
   return frames;
 }
@@ -1808,6 +1816,55 @@ function gearTile(it, t) {
   return renderPixels(tile);
 }
 
+const STAT_LABEL = { atk: 'ATK', def: 'armor', maxHp: 'HP', spd: 'SPD', evasion: 'evasion', crit: 'crit', lifesteal: 'lifesteal', regen: 'regen', resist: 'resist', thorns: 'thorns', multi: 'multi-hit' };
+const PCT_STATS = new Set(['crit', 'lifesteal', 'regen', 'resist', 'thorns', 'multi']);
+const statText = (k, v) => (PCT_STATS.has(k) ? `${v < 0 ? '−' : '+'}${Math.round(Math.abs(v) * 100)}% ${STAT_LABEL[k]}` : `${v < 0 ? '−' : '+'}${r1(Math.abs(v))} ${STAT_LABEL[k] || k}`);
+
+// The drop card: the item, every stat against what it replaced, and why it might matter right now.
+function itemCard(p, it, width, title, t, maxRows = 99) {
+  const rc = RARITY[it.rarity].color, inner = width - 4;
+  const dim = (x) => color('#8a849f', x);
+  const edge = (x) => color(mixHex(rc, '#1c1b26', 0.35), x);
+  const line = (content) => `${edge('│')} ${fit(content, inner)} ${edge('│')}`;
+  const titleText = title ? ` ${title} ` : '';
+  const out = [edge(`╭─${titleText}${'─'.repeat(Math.max(0, width - 3 - cellWidth(titleText)))}╮`)];
+  const tile = gearTile(it, t);
+  const kind = it.unique ? 'unique' : RARITY[it.rarity].name;
+  const head = [
+    color(rc, `\x1b[1m${it.unique ? '★ ' : it.set ? '◆ ' : ''}${it.name}`),
+    dim(`${kind} ${it.type || it.slot}${it.element ? ` · ${ELEMENTS[it.element].icon} ${it.element}` : ''} · Lv ${it.level} · power ${Math.round(itemPower(it))}`),
+    it.equipped ? color('#69f0ae', '★ equipped') : dim('kept in the bag'),
+    '', '',
+  ];
+  for (let r = 0; r < 5; r++) out.push(line(`${fit(tile[r], 11)} ${head[r]}`));
+  const old = (it.cmp && it.cmp.stats) || {};
+  const keys = [...new Set([...Object.keys(it.stats), ...Object.keys(old)])].sort((a, b) => Math.abs(it.stats[b] || 0) * (STAT_WEIGHT[b] || 1) - Math.abs(it.stats[a] || 0) * (STAT_WEIGHT[a] || 1));
+  const stats = [], extra = [];
+  for (const k of keys.slice(0, 4)) {
+    const v = it.stats[k] || 0, before = old[k];
+    const diff = v - (before || 0);
+    const right = before == null ? color('#69f0ae', '▲ new') : Math.abs(diff) < 0.005 ? dim('=') : diff > 0 ? color('#69f0ae', `▲ ${statText(k, diff)}`) : color('#ff8a80', `▼ ${statText(k, diff)}`);
+    const left = v ? statText(k, v) : dim(`no ${STAT_LABEL[k] || k}`);
+    stats.push(line(fit(left, inner - cellWidth(right)) + right));
+  }
+  const affixLine = it.affixes && it.affixes.length ? line(dim(it.affixes.join(' · '))) : null;
+  let compareLine;
+  if (it.cmp) {
+    const now = Math.round(itemPower(it)), was = it.cmp.power || 0;
+    const pct = was ? Math.round(((now - was) / was) * 100) : 0;
+    compareLine = line(dim(`vs ${it.cmp.name} · power ${was} → ${now} `) + (now >= was ? color('#69f0ae', `▲ ${pct}%`) : color('#ff8a80', `▼ ${-pct}%`)));
+  } else if (it.cmp === null) compareLine = line(dim(`fills the empty ${it.slot} slot`));
+  const hint = it.unique ? color('#ffb300', `★ ${UNIQUES[it.unique].desc}`) : it.set ? color('#80cbc4', `◆ ${SETS[it.set].label} set ${setCount(p, it.set)}/3: ${SETS[it.set].bonus}`) : it.hint ? dim(it.hint) : '';
+  // Trim to the arena height: drop the hint, then affixes, then minor stats; the power comparison always stays.
+  let hintLine = hint ? line(hint) : null, aff = affixLine;
+  const rowsFor = () => out.length + stats.length + (aff ? 1 : 0) + (compareLine ? 1 : 0) + (hintLine ? 1 : 0) + 1;
+  if (rowsFor() > maxRows) hintLine = null;
+  if (rowsFor() > maxRows) aff = null;
+  while (rowsFor() > maxRows && stats.length > 1) stats.pop();
+  out.push(...stats, ...(aff ? [aff] : []), ...(compareLine ? [compareLine] : []), ...(hintLine ? [hintLine] : []), edge(`╰${'─'.repeat(width - 2)}╯`));
+  return out;
+}
+
 function draw(p, f, frame) {
   const cols = process.stdout.columns || 80, rows = process.stdout.rows || 24;
   const W = Math.min(cols, 112), IW = W - 4;
@@ -1833,6 +1890,8 @@ function draw(p, f, frame) {
   out.push(row(fit(head, Math.max(10, IW - cellWidth(purse) - 1)) + purse));
   out.push(hline('├', '┤'));
 
+  const cardStart = Math.max(PET_W * scale + 4, 38);
+  const card = f.card && IW - cardStart >= 46 ? itemCard(p, f.card, Math.min(64, IW - cardStart), f.cardTitle, frame >> 2, (scale === 2 ? 18 : 9) + 3) : null;
   const petArt = composePet(form, p, { blink: !f.fight && frame % 23 === 0, sparkle: frame % 8 < 4, t: frame >> 1 });
   const petLines = renderPixels(petCanvas(petArt, form, frame, {
     dy: f.fight || resting ? 0 : frame % 6 < 3 ? 0 : -1,
@@ -1855,11 +1914,13 @@ function draw(p, f, frame) {
     if (resting) caption = [`z Z z  fainted, back in ${p.faint} ticks`, '#9e9e9e'];
     else caption = [['patrolling the codebase', 'sniffing for bugs', 'guarding your diff', 'waiting for monsters'][Math.floor(frame / 40) % 4] + '.'.repeat(1 + (frame >> 2) % 3), '#7a7a7a'];
   }
+  const arenaTop = out.length;
   for (let i = 0; i < petLines.length; i++) {
     const left = ' '.repeat(Math.max(0, petDx * scale)) + petLines[i];
     out.push(row(fit(fit(left, Math.max(1, monCol + monDx * scale)) + (monLines[i] || ''), IW)));
   }
   out.push(row(center(color(caption[1], `\x1b[1m${caption[0]}`), IW)));
+  const cardRows = card ? [...petLines.map((l) => ' '.repeat(Math.max(0, petDx * scale)) + l), ''] : null;
   const php = f.fight ? f.php : p.hp, pmax = f.fight ? f.fight.petMaxHp : s.maxHp;
   const barW = Math.max(8, Math.min(22, monCol - 18));
   const need = xpToNext(p.level);
@@ -1870,8 +1931,15 @@ function draw(p, f, frame) {
   const rightAt = (txt) => Math.max(1, IW - cellWidth(txt));
   const hpL = `${color('#e53935', '♥')} ${bar(php / pmax, barW, hpColor(php / pmax))} ${`${Math.round(php)}/${pmax}`}`;
   const xpL = `${color('#4fa3ff', '✦')} ${bar(p.xp / need, barW, '#4fa3ff')} ${`${p.xp}/${need} XP`}`;
-  out.push(row(fit(hpL, fightMon ? monCol : rightAt(rightHp)) + rightHp));
-  out.push(row(fit(xpL, fightMon ? Math.min(monCol, rightAt(rightXp)) : rightAt(rightXp)) + rightXp));
+  if (card) {
+    cardRows.push(hpL, xpL);
+    while (cardRows.length < card.length) cardRows.push('');
+    out.length = arenaTop;
+    for (let i = 0; i < cardRows.length; i++) out.push(row(fit(cardRows[i], cardStart) + (card[i] || '')));
+  } else {
+    out.push(row(fit(hpL, fightMon ? monCol : rightAt(rightHp)) + rightHp));
+    out.push(row(fit(xpL, fightMon ? Math.min(monCol, rightAt(rightXp)) : rightAt(rightXp)) + rightXp));
+  }
 
   out.push(hline('├', '┤'));
   const gearShown = loadConfig().gear !== false;
