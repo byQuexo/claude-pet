@@ -5,7 +5,7 @@ const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
 const crypto = require('crypto');
-const { FORMS, MONSTER_ART, MONSTER_PALS, GEAR_ANCHORS, SECRET_BOSS } = require('./art.js');
+const { FORMS, MONSTER_ART, MONSTER_PALS, GEAR_ANCHORS, SECRET_BOSS, ITEM_ICONS, ICON_MATERIALS } = require('./art.js');
 
 const HOME = process.env.CLAUDE_PET_HOME || path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'claude-pet');
 const STATE = path.join(HOME, 'state.json');
@@ -836,7 +836,7 @@ function openBox(p, id) {
   for (let i = 0; i < b.extras; i++) extras.push(rollConsumable(p));
   if (id === 'mythic') { gainXp(p, xpToNext(p.level) - p.xp); extras.push({ name: 'Senior Dev Mentorship (+1 Lv)' }); const t = pick(TOMES); p.bonus[t.stat] = r2((p.bonus[t.stat] || 0) + t.amt(p.level)); extras.push({ name: `${t.name} (forever)` }); }
   const contents = [...items.map((it) => ({ name: it.name, rarity: it.rarity, equipped: !!it.equipped })), ...extras.map((e) => ({ name: e.name })), { name: `${gold} gold` }];
-  log(p, 'box', `opened a ${b.name}: ${contents.map((c) => c.name).join(', ')}`);
+  log(p, 'box', `opened ${/^[AEIOU]/.test(b.name) ? 'an' : 'a'} ${b.name}: ${contents.map((c) => c.name).join(', ')}`);
   return { id, contents };
 }
 
@@ -1184,11 +1184,17 @@ function dressPet(grid, pal, key, gear, opts) {
   if (helmet && A.head) {
     const [l, m, d] = plateColors(helmet.rarity);
     Object.assign(pal, { 1: l, 2: m, 3: d, 4: GEAR_FIT[helmet.rarity][1], 5: RARITY[helmet.rarity].color });
-    const { x0, x1, y } = A.head;
-    for (let x = x0 + 1; x < x1; x++) set(x, y - 1, x === x0 + 1 ? '1' : x === x1 - 1 ? '3' : '2');
-    for (let x = x0; x <= x1; x++) set(x, y, x === x0 ? '1' : x === x1 ? '3' : '2');
-    for (let x = x0; x <= x1; x++) set(x, y + 1, '4');
-    if (helmet.rarity >= 2) set(Math.floor((x0 + x1) / 2), y - 2, '5');
+    const { x0, x1, y, circlet } = A.head;
+    if (circlet) {
+      for (let x = x0; x <= x1; x++) set(x, y, '4');
+      set(Math.floor((x0 + x1) / 2), y, '5');
+      set(Math.floor((x0 + x1) / 2) + 1, y, '5');
+    } else for (let x = x0 + 1; x < x1; x++) set(x, y - 1, x === x0 + 1 ? '1' : x === x1 - 1 ? '3' : '2');
+    if (!circlet) {
+      for (let x = x0; x <= x1; x++) set(x, y, x === x0 ? '1' : x === x1 ? '3' : '2');
+      for (let x = x0; x <= x1; x++) set(x, y + 1, '4');
+      if (helmet.rarity >= 2) set(Math.floor((x0 + x1) / 2), y - 2, '5');
+    }
   }
   if (charm && A.neck) {
     pal[8] = opts.sparkle ? mixHex(RARITY[charm.rarity].color, '#ffffff', 0.5) : RARITY[charm.rarity].color;
@@ -1362,12 +1368,15 @@ const MODES = ['full', 'minimal', 'compact'];
 const statusMode = (cfg) => (MODES.includes(cfg.mode) ? cfg.mode : cfg.sprite === false ? 'compact' : 'full');
 const ANSI_RE = /\x1b\[[0-9;?]*[a-zA-Z]/g;
 
+// BMP symbols terminals draw as double-width emoji; everything else in that range stays narrow.
+const WIDE_BMP = new Set([0x231a, 0x231b, 0x23e9, 0x23ea, 0x23eb, 0x23ec, 0x23f0, 0x23f3, 0x25fd, 0x25fe, 0x2614, 0x2615, 0x267f, 0x2693, 0x26a1, 0x26aa, 0x26ab, 0x26bd, 0x26be, 0x26c4, 0x26c5, 0x26ce, 0x26d4, 0x26ea, 0x26f2, 0x26f3, 0x26f5, 0x26fa, 0x26fd, 0x2705, 0x270a, 0x270b, 0x2728, 0x274c, 0x274e, 0x2753, 0x2754, 0x2755, 0x2757, 0x2795, 0x2796, 0x2797, 0x27b0, 0x27bf, 0x2b1b, 0x2b1c, 0x2b50, 0x2b55]);
+
 function cellWidth(str) {
   let w = 0;
   for (const ch of str.replace(ANSI_RE, '')) {
     const c = ch.codePointAt(0);
     if (c === 0xfe0f || c === 0x200d) continue;
-    const wide = (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) || (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff)
+    const wide = WIDE_BMP.has(c) || (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) || (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff)
       || (c >= 0xff00 && c <= 0xff60) || (c >= 0xffe0 && c <= 0xffe6) || (c >= 0x1f300 && c <= 0x1faff);
     w += wide ? 2 : 1;
   }
@@ -1590,97 +1599,194 @@ function evolveFrames(evo) {
 
 const vis = (s) => s.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').length;
 const padTo = (s, w) => s + ' '.repeat(Math.max(0, w - vis(s)));
-const center = (s, w) => ' '.repeat(Math.max(0, Math.floor((w - vis(s)) / 2))) + s;
+const center = (s, w) => ' '.repeat(Math.max(0, Math.floor((w - cellWidth(s)) / 2))) + s;
+
+// Pads or cuts an ANSI string to exactly w terminal cells, ending cut text with an ellipsis instead of wrapping.
+function fit(str, w) {
+  const total = cellWidth(str);
+  if (total <= w) return str + ' '.repeat(w - total);
+  let out = '', used = 0;
+  for (const part of str.split(/(\x1b\[[0-9;?]*[a-zA-Z])/)) {
+    if (part.startsWith('\x1b[')) { out += part; continue; }
+    for (const ch of part) {
+      const cw = cellWidth(ch);
+      if (used + cw > w - 1) return `${out}${RESET}…${' '.repeat(Math.max(0, w - 1 - used))}`;
+      out += ch; used += cw;
+    }
+  }
+  return out;
+}
+
+const CHARM_ICON = { 'Rubber Duck': 'duck', 'Coffee Flask': 'flask', 'Lucky Commit': 'coin', 'Green CI Badge': 'badge', 'Sudo Ring': 'ring' };
+const iconKind = (it) => (it.slot === 'weapon' ? (ITEM_ICONS[it.type] ? it.type : 'sword') : it.slot === 'charm' ? CHARM_ICON[Object.keys(CHARM_ICON).find((n) => it.name.includes(n))] || 'ring' : it.slot);
+
+function iconPixels(kind, rarity, element, t = 0) {
+  const M = ICON_MATERIALS, r = Math.min(rarity, 5), rc = RARITY[r].color, fitc = M.FITTINGS[r];
+  const blade = element ? M.BLADE[element] : r === 0 ? M.DULL : M.STEEL;
+  const pal = { o: '#14121c', ...fitc, ...M.LEATHER, ...blade };
+  pal.G = r >= 1 ? rc : fitc.Y;
+  pal.R = r >= 3 ? (element ? mixHex(M.BLADE[element].l, '#ffffff', t % 2 ? 0.5 : 0) : t % 2 ? mixHex(rc, '#ffffff', 0.45) : rc) : kind === 'axe' || kind === 'staff' ? M.LEATHER.b : blade.m;
+  pal.r = r === 0 ? '#8a4b22' : blade.m;
+  pal.X = r >= 2 ? rc : null;
+  if (kind === 'armor' || kind === 'helmet') {
+    const plate = r === 5 ? { l: '#6e5a8a', m: '#3b2d52', d: '#1d1530' } : r === 4 ? { l: '#f2c4b8', m: '#b85a48', d: '#6b2418' } : M.STEEL;
+    for (const k of ['l', 'm', 'd']) pal[k] = r === 0 ? M.DULL[k] : r >= 4 ? plate[k] : mixHex(plate[k], rc, 0.18);
+  }
+  if (kind === 'boots') Object.assign(pal, r === 5 ? { l: '#5a4a72', m: '#33264a', d: '#1a1228' } : { l: '#b07a4a', m: '#7a4f2c', d: '#4a2e18' });
+  if (kind === 'staff') Object.assign(pal, element ? { q: M.BLADE[element].l, Q: M.BLADE[element].m, k: M.BLADE[element].d } : { q: mixHex(rc, '#ffffff', 0.6), Q: rc, k: mixHex(rc, '#000000', 0.45) }, { s: '#ffffff' });
+  if (kind === 'scythe') Object.assign(pal, { s: '#2a060c', q: t % 2 ? '#ffb347' : '#ff6a1a', x: t % 2 ? '#ff2a2a' : '#c1121f', Z: '#5a2a30', E: '#ff2a2a', R: t % 2 ? '#ff6a1a' : '#c1121f' });
+  if (kind === 'duck') Object.assign(pal, { l: '#ffe066', m: '#f5b700', e: '#1a1a1a', k: '#ff8c1a' });
+  if (kind === 'flask') Object.assign(pal, { l: '#7fd1c7', m: '#3a9d92', d: '#1f5f58', S: t % 2 ? '#e8eef5' : null });
+  if (kind === 'coin') Object.assign(pal, { y: '#fff1a8', Y: '#e0aa2e', z: '#8a5a10', k: '#6b3f08' });
+  if (kind === 'badge') Object.assign(pal, { n: '#9ff2b0', N: '#2fbf5a', v: '#156b30', w: '#ffffff' });
+  if (kind === 'ring') Object.assign(pal, { s: '#ffffff' });
+  return ITEM_ICONS[kind].map((row) => [...row].map((ch) => (ch !== '.' && pal[ch] ? hex(pal[ch]) : null)));
+}
+
+const STAT_WEIGHT = { maxHp: 0.15, crit: 100, lifesteal: 100, regen: 100, resist: 100, thorns: 100, evasion: 0.6 };
+function topStats(it) {
+  return Object.entries(it.stats).sort((a, b) => Math.abs(b[1]) * (STAT_WEIGHT[b[0]] || 1) - Math.abs(a[1]) * (STAT_WEIGHT[a[0]] || 1)).slice(0, 2).map(([k, v]) => {
+    if (['crit', 'lifesteal', 'regen', 'resist', 'thorns'].includes(k)) return `+${Math.round(v * 100)}% ${{ lifesteal: 'LIFE', resist: 'RES', thorns: 'THRN' }[k] || k.toUpperCase()}`;
+    return `${v < 0 ? '' : '+'}${Math.round(v)} ${{ atk: 'ATK', def: 'ARM', maxHp: 'HP', spd: 'SPD', evasion: 'EVA' }[k] || k}`;
+  }).join(' ');
+}
+
+// Collapses repeats in the log for display: identical lines become ×N, purchases of the same thing merge.
+function compactLog(entries) {
+  const out = [];
+  for (const e of entries.slice().reverse()) {
+    const bought = e.type === 'shop' && (e.text.match(/^bought (.+?) for (\d+)g/) || null);
+    const key = bought ? `shop:${bought[1]}` : `${e.type}:${e.text}`;
+    const last = out[out.length - 1];
+    if (last && last.key === key) { last.n++; last.gold += bought ? +bought[2] : 0; continue; }
+    out.push({ ...e, key, n: 1, gold: bought ? +bought[2] : 0 });
+  }
+  return out.map((e) => {
+    let text = e.text;
+    if (e.type === 'code' && e.n > 1 && /committed/.test(text)) text = `you committed ×${e.n} · Commit Blessing refreshed`;
+    else if (e.type === 'shop' && e.n > 1) text = text.replace(/^bought (.+?) for \d+g/, `bought ${e.n}× $1 · ${e.gold}g`).replace(/only \d+ Energy Drinks? left/, 'was low on potions');
+    else if (e.n > 1) text += ` ×${e.n}`;
+    text = text.replace(/^bought (.+?) for (\d+)g — reforged at the blacksmith to \+\d+$/, 'reforged $1 at the blacksmith · $2g').replace(/^bought (.+?) for (\d+)g — /, 'bought $1 · $2g — ');
+    return { ...e, text };
+  });
+}
+
+function shortAgo(t) {
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)}m` : s < 86400 ? `${Math.round(s / 3600)}h` : `${Math.round(s / 86400)}d`;
+}
+
+const LOG_ICON = { fight: '⚔', boss: '☠', faint: 'z', level: '⬆', evolve: '✨', wake: '☀', flee: '~', town: '⌂', shop: '$', box: '🎁', craft: '⚒', code: '⌨' };
+const LOG_COLOR = { boss: '#ff5252', evolve: '#ffd700', level: '#69f0ae', faint: '#9e9e9e', town: '#80cbc4', shop: '#ffd54f', box: '#e040fb', craft: '#ffb74d', code: '#4dd0e1' };
 
 function draw(p, f, frame) {
   const cols = process.stdout.columns || 80, rows = process.stdout.rows || 24;
-  const scale = cols >= 84 && rows >= 44 ? 2 : 1;
-  const cw = 16 * scale, pw = PET_W * scale, gutter = 3 * scale;
+  const W = Math.min(cols, 112);
+  const scale = cols >= 100 && rows >= 60 ? 2 : 1;
   const s = petStats(p);
+  const dim = (t) => color('#8a849f', t);
+  const line = (n) => color('#3a3650', '─'.repeat(Math.max(0, n)));
+  const rule = (label) => (label ? `${line(2)} ${color('#6d6690', label)} ${line(W - 4 - label.length)}` : line(W));
+  const out = [];
+
   const fightMon = f.fight && !f.monGone ? f.fight.monster : null;
   const form = f.form || (f.fight ? f.fight.form : formOf(p));
   const resting = !f.fight && p.faint > 0;
+
+  const tags = [...(p.badges || []).map((b) => color('#ffd54f', `🏅 ${b.name}`)), p.shiny && color('#ffd54f', '✦ shiny'), p.nature && dim(p.nature), p.branch && p.stage >= 2 && color(BRANCHES[p.branch].mark, `${BRANCHES[p.branch].cls} class`)].filter(Boolean).join(dim(' · '));
+  const purse = `${color('#ffd54f', `💰 ${p.gold}g`)}  🎁 ${p.boxes.length}  ${color('#69f0ae', `🧪 ${p.potions}/${MAX_POTIONS}`)}`;
+  const head = ` ${color('#ffd700', '✦')} ${color('#ffffff', `\x1b[1m${p.name}`)} ${dim('the')} ${color('#ffffff', formName(form))} ${color('#ffd700', `Lv ${p.level}`)}${tags ? `  ${tags}` : ''}`;
+  out.push(fit(head, Math.max(10, W - cellWidth(purse) - 1)) + purse);
+  out.push(rule());
+
   const petArt = composePet(form, p, { blink: !f.fight && frame % 23 === 0, sparkle: frame % 8 < 4, t: frame >> 1 });
   const petLines = renderPixels(petCanvas(petArt, form, frame, {
     dy: f.fight || resting ? 0 : frame % 6 < 3 ? 0 : -1,
     gray: f.petGray || resting, burst: f.burst,
     tint: f.flash ? '#ffffff' : f.petTint ? f.petTintColor || '#ff1744' : null, amount: f.flash || f.petTint || 0,
   }, frame, p.shadows || 0), scale);
+  const idleFoe = !fightMon && !f.chest && !f.anvil && !f.fight && p.lastFight ? p.lastFight.monster : null;
   const monLines = f.anvil
     ? renderSprite(composeAnvil(f.anvil.spark), { scale, tint: f.anvilFlash ? '#ffffff' : null, amount: f.anvilFlash || 0 })
     : f.chest
-    ? renderSprite(composeChest(f.chest.id, f.chest.open), { scale, dy: f.chest.open ? 0 : frame % 2 ? -1 : 0, tint: f.chestFlash ? '#ffffff' : null, amount: f.chestFlash || 0 })
-    : fightMon
-    ? renderSprite(composeMonster(fightMon), { scale, dy: frame % 4 < 2 ? 0 : -1, gray: f.monGray, dissolve: f.dissolve, slash: f.slash, tint: f.monTint ? f.monTintColor || '#ff1744' : fightMon.secret && frame % 9 === 0 ? '#ffd54f' : null, amount: f.monTint || (fightMon.secret ? 0.35 : 0) })
-    : petLines.map(() => '');
-
-  const out = [];
-  out.push('');
-  const tags = [...(p.badges || []).map((b) => color('#ffd54f', `🏅 ${b.name}`)), p.shiny && color('#ffd54f', '✦ shiny'), p.nature && color('#9e9e9e', p.nature), p.branch && p.stage >= 2 && color(BRANCHES[p.branch].mark, `${BRANCHES[p.branch].cls} class`)].filter(Boolean).join(color('#5a5a5a', ' · '));
-  out.push(center(`${color('#ffd700', '✦ CLAUDE PET ✦')}  ${color('#ffffff', `\x1b[1m${p.name}`)} ${color('#9e9e9e', 'the')} ${color('#ffffff', formName(form))}  ${color('#ffd700', `Lv ${p.level}`)}${tags ? `  ${tags}` : ''}`, cols));
-  out.push('');
+      ? renderSprite(composeChest(f.chest.id, f.chest.open), { scale, dy: f.chest.open ? 0 : frame % 2 ? -1 : 0, tint: f.chestFlash ? '#ffffff' : null, amount: f.chestFlash || 0 })
+      : fightMon
+        ? renderSprite(composeMonster(fightMon), { scale, dy: frame % 4 < 2 ? 0 : -1, gray: f.monGray, dissolve: f.dissolve, slash: f.slash, tint: f.monTint ? f.monTintColor || '#ff1744' : fightMon.secret && frame % 9 === 0 ? '#ffd54f' : null, amount: f.monTint || (fightMon.secret ? 0.35 : 0) })
+        : idleFoe
+          ? renderSprite(composeMonster(idleFoe), { scale, gray: true, tint: '#1c1b26', amount: 0.55 })
+          : [];
   const shake = f.shake === true ? 1 : f.shake === 'back' ? -1 : 0;
   const petDx = (f.petDx || 0) + shake, monDx = (f.monDx || (f.chest && f.chest.dx) || 0) - shake;
-  const leftPad = Math.max(1, Math.floor((cols - (pw + cw + gutter * 2 + 4 * scale)) / 2) + shake);
+  const monCol = W - 16 * scale - 2;
   for (let i = 0; i < petLines.length; i++) {
-    const L = ' '.repeat(Math.max(0, gutter + petDx * scale)) + petLines[i];
-    const R = monLines[i] ? ' '.repeat(Math.max(0, gutter + monDx * scale)) + monLines[i] : '';
-    out.push(' '.repeat(leftPad) + padTo(L, pw + gutter * 2) + ' '.repeat(4 * scale) + R);
+    const left = ' '.repeat(Math.max(0, 1 + petDx * scale)) + petLines[i];
+    const mStart = Math.max(1, monCol + monDx * scale);
+    out.push(fit(fit(left, mStart) + (monLines[i] || ''), W));
   }
   const php = f.fight ? f.php : p.hp, pmax = f.fight ? f.fight.petMaxHp : s.maxHp;
-  const hpLine = (cur, max) => `${bar(cur / max, cw - 2, hpColor(cur / max))}`;
-  const petHp = padTo(' '.repeat(gutter + PET_X * scale) + hpLine(php, pmax), pw + gutter * 2);
-  const monHp = fightMon ? ' '.repeat(gutter) + hpLine(f.mhp, fightMon.maxHp) : '';
-  out.push(' '.repeat(leftPad) + petHp + ' '.repeat(4 * scale) + monHp);
-  const petHpTxt = padTo(' '.repeat(gutter + PET_X * scale) + color('#9e9e9e', `HP ${Math.round(php)}/${pmax}`), pw + gutter * 2);
+  const barW = Math.max(8, Math.min(22, monCol - 18));
+  const need = xpToNext(p.level);
   const weak = fightMon && MONSTERS[fightMon.kind].weak;
-  const monTxt = fightMon ? ' '.repeat(gutter) + color(fightMon.boss ? '#ff5252' : '#9e9e9e', `${fightMon.name} Lv${fightMon.level}`) + (weak ? ` ${color('#8a8a8a', `weak ${ELEMENTS[weak].icon}`)}` : '') : '';
-  out.push(' '.repeat(leftPad) + petHpTxt + ' '.repeat(4 * scale) + monTxt);
-  out.push('');
+  const rightHp = fightMon ? bar(f.mhp / fightMon.maxHp, 16 * scale - 2, hpColor(f.mhp / fightMon.maxHp)) : idleFoe ? dim(`last: ${idleFoe.name} (Lv ${idleFoe.level})`) : '';
+  const town = TOWN_EVERY - (p.stats.fights % TOWN_EVERY);
+  const rightXp = fightMon ? color(fightMon.boss ? '#ff5252' : '#d9d4ee', `${fightMon.name} Lv${fightMon.level}`) + (weak ? ` ${dim(`weak ${ELEMENTS[weak].icon}`)}` : '') : dim(`town & full heal in ${town} fight${town > 1 ? 's' : ''}`);
+  const rightAt = (txt) => Math.max(1, W - cellWidth(txt) - 1);
+  const hpL = ` ${color('#e53935', '♥')} ${bar(php / pmax, barW, hpColor(php / pmax))} ${dim(`${Math.round(php)}/${pmax}`)}`;
+  const xpL = ` ${color('#4fa3ff', '✦')} ${bar(p.xp / need, barW, '#4fa3ff')} ${dim(`${p.xp}/${need} XP`)}`;
+  out.push(fit(fit(hpL, fightMon ? monCol : rightAt(rightHp)) + rightHp, W));
+  out.push(fit(fit(xpL, fightMon ? Math.min(monCol, rightAt(rightXp)) : rightAt(rightXp)) + rightXp, W));
   let caption = f.caption;
   if (!caption) {
-    if (resting) caption = [`z Z z  fainted — back in ${p.faint} ticks`, '#9e9e9e'];
+    if (resting) caption = [`z Z z  fainted, back in ${p.faint} ticks`, '#9e9e9e'];
     else caption = [['patrolling the codebase', 'sniffing for bugs', 'guarding your diff', 'waiting for monsters'][Math.floor(frame / 40) % 4] + '.'.repeat(1 + (frame >> 2) % 3), '#7a7a7a'];
   }
-  out.push(center(color(caption[1], `\x1b[1m${caption[0]}`), cols));
-  out.push('');
+  out.push(fit(center(color(caption[1], `\x1b[1m${caption[0]}`), W), W));
 
-  const dim = (t) => color('#8a8a8a', t);
-  const need = xpToNext(p.level);
-  out.push(`  ${dim('XP')} ${bar(p.xp / need, Math.min(30, cols - 20), '#4fa3ff')} ${dim(`${p.xp}/${need}`)}`);
-  out.push(`  ${statLine(s, dim, p.level)}${s.multi ? ` ${dim('MULTI')} ${pct(s.multi)}` : ''}${s.regen ? ` ${dim('REGEN')} +${pct(s.regen)}` : ''}`);
-  const town = TOWN_EVERY - (p.stats.fights % TOWN_EVERY);
-  out.push(`  ${color('#ffd54f', `💰 ${p.gold}g`)}  ${dim(`· town & full heal in ${town} fight${town > 1 ? 's' : ''}`)}`);
-  if (p.lastShop && p.lastShop.bought.length) {
-    for (const b of p.lastShop.bought.slice(0, 3)) out.push(`  ${dim('🛒')} ${color(b.rarity != null ? RARITY[b.rarity].color : '#ffd54f', b.name)} ${dim(`${b.price}g — ${short(b.why, Math.max(10, cols - b.name.length - 16))}`)}`);
+  const gearShown = loadConfig().gear !== false;
+  out.push(rule(gearShown ? 'GEAR' : 'GEAR · hidden on the pet (g)'));
+  const roomy = rows - out.length >= 26;
+  if (roomy) {
+    const per = Math.max(1, Math.min(5, Math.floor((W - 1) / 18)));
+    for (let c = 0; c < SLOTS.length; c += per) {
+      const chunk = SLOTS.slice(c, c + per);
+      const icons = chunk.map((slot) => { const it = p.gear[slot]; return it ? renderPixels(iconPixels(iconKind(it), it.rarity, it.element, frame >> 2)) : []; });
+      for (let r = 0; r < 8; r++) out.push(fit(' ' + icons.map((ls) => fit(ls[r] || '', 16) + '  ').join(''), W));
+      out.push(fit(' ' + chunk.map((slot) => { const it = p.gear[slot]; return fit(it ? color(RARITY[it.rarity].color, `${it.element ? `${ELEMENTS[it.element].icon} ` : ''}${it.name}`) : dim(`— no ${slot} —`), 16) + '  '; }).join(''), W));
+      out.push(fit(' ' + chunk.map((slot) => fit(p.gear[slot] ? dim(topStats(p.gear[slot])) : '', 16) + '  ').join(''), W));
+    }
+  } else {
+    for (const slot of SLOTS) { const it = p.gear[slot]; out.push(fit(` ${dim(GEAR_ICON[slot])} ${it ? `${color(RARITY[it.rarity].color, it.name)} ${dim(topStats(it))}` : dim('—')}`, W)); }
   }
-  const fx = [p.potions ? color('#69f0ae', `🧪 ${p.potions}/${MAX_POTIONS} Energy Drinks`) : '', ...p.buffs.map((b) => color('#ff7043', `${BUFFS[b.id].icon} ${BUFFS[b.id].name} (${b.fights})`))].filter(Boolean);
-  if (fx.length) out.push(`  ${fx.join('  ')}`);
-  const tomes = Object.entries(p.bonus).map(([k, v]) => `+${k === 'crit' ? pct(v) : r1(v)} ${k}`);
-  if (tomes.length) out.push(`  ${dim(`📖 tomes: ${tomes.join(' · ')}`)}`);
-  for (const slot of SLOTS) {
-    const it = p.gear[slot];
-    const st = it ? Object.entries(it.stats).map(([k, v]) => `${v < 0 ? '' : '+'}${['crit', 'lifesteal', 'thorns', 'regen', 'resist'].includes(k) ? pct(v) : v} ${k === 'def' ? 'armor' : k === 'evasion' ? 'evasion rating' : k}`).join(' ') : '';
-    const E = it && it.element && ELEMENTS[it.element];
-    out.push(`  ${E ? E.icon : dim(GEAR_ICON[slot])} ${it ? `${color(RARITY[it.rarity].color, it.name)} ${E ? color(E.color, it.element) + ' ' : ''}${dim(st)}` : dim('— empty —')}`);
+
+  out.push(rule('STATS · ACTIVE'));
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  const statRows = [
+    [['ATK', Math.round(s.atk)], ['ARM', Math.round(s.def)], ['EVA', pct(evadeChance(s.evasion, p.level))]],
+    [['SPD', Math.round(s.spd)], ['CRIT', pct(s.crit)], ['LIFE', pct(s.lifesteal)]],
+    [['RES', pct(Math.min(0.75, s.resist))], ['MULTI', pct(s.multi)], ['REGEN', `+${pct(s.regen)}`]],
+  ].map((r) => ' ' + r.map(([k, v]) => fit(`${dim(k)} ${v}`, 11)).join(''));
+  const active = [
+    ...p.buffs.map((b) => color('#ff9e64', `${BUFFS[b.id].icon} ${BUFFS[b.id].name}`) + dim(` ${b.fights} fights`)),
+    ...(Object.keys(p.bonus).length ? [dim(`📖 tomes ${Object.entries(p.bonus).map(([k, v]) => `+${['crit', 'lifesteal', 'regen', 'resist'].includes(k) ? pct(v) : r1(v)} ${k}`).join(' · ')}`)] : []),
+    ...(p.monarch ? [color('#a66bff', `🌑 shadow army ${p.shadows}/3`)] : []),
+    ...(p.stage === 0 ? [dim('🥚 studying how you code (pet seed)')] : []),
+  ];
+  if (!active.length) active.push(dim('no buffs right now'));
+  if (W >= 74) {
+    for (let i = 0; i < Math.max(statRows.length, active.length); i++) out.push(fit(fit(statRows[i] || '', 36) + color('#3a3650', '│ ') + (active[i] || ''), W));
+  } else {
+    for (const r of statRows) out.push(fit(r, W));
+    for (const a of active) out.push(fit(' ' + a, W));
   }
-  const nextStage = STAGE_LEVELS[p.stage + 1];
-  const lean = leaning(p);
-  if (nextStage) {
-    let t = `next evolution at Lv ${nextStage}`;
-    if (p.stage >= 1 && lean) t += ` · ${p.stage === 1 ? 'class' : 'trait'} forming: ${BRANCHES[lean.branch].cls} (${lean.bucket} ${Math.round(lean.share * 100)}%)`;
-    if (p.stage === 0) t += ' · the egg is studying how you code';
-    out.push(`  ${color('#ffd700', '✨')} ${dim(t)}`);
-  } else out.push(`  ${color('#ffd700', '👑')} ${dim('final form reached')}`);
-  out.push(`  ${dim(`kills ${p.stats.kills} · bosses ${p.stats.bosses} · faints ${p.stats.faints} · items ${p.stats.items} · crafted ${p.stats.crafted || 0} · ticks ${p.stats.ticks}`)}`);
-  out.push('');
-  const room = rows - out.length - 1;
-  const icons = { fight: '⚔', boss: '☠', faint: 'z', level: '⬆', evolve: '✨', wake: '☀', flee: '~', town: '⌂', shop: '$', box: '🎁', craft: '⚒', code: '⌨' };
-  for (const e of p.log.slice(-Math.max(0, room)).reverse()) {
-    const c = { boss: '#ff5252', evolve: '#ffd700', level: '#69f0ae', faint: '#9e9e9e', town: '#80cbc4', shop: '#ffd54f', box: '#e040fb', craft: '#ffb74d', code: '#4dd0e1' }[e.type] || '#bdbdbd';
-    out.push(`  ${color('#5a5a5a', ago(e.t).padStart(7))} ${icons[e.type] || '·'} ${color(c, e.text.slice(0, cols - 14))}`);
-  }
-  process.stdout.write('\x1b[H' + out.slice(0, rows).map((l) => l + '\x1b[K').join('\n') + '\x1b[J');
+
+  out.push(rule('LOG'));
+  const room = rows - out.length - 2;
+  for (const e of compactLog(p.log).slice(0, Math.max(0, room))) out.push(fit(` ${color('#6d6690', shortAgo(e.t).padStart(3))} ${LOG_ICON[e.type] || '·'} ${color(LOG_COLOR[e.type] || '#c9c3e6', e.text)}`, W));
+  while (out.length < rows - 2) out.push('');
+  out.push(rule());
+  const keys = color('#5a5a5a', 'q quit · g gear · r replay');
+  out.push(fit(dim(` kills ${p.stats.kills} · bosses ${p.stats.bosses} · faints ${p.stats.faints} · items ${p.stats.items} · crafted ${p.stats.crafted || 0}`), Math.max(0, W - cellWidth(keys) - 1)) + keys);
+  process.stdout.write('\x1b[H' + out.slice(0, rows).map((l) => l + RESET + '\x1b[K').join('\n') + '\x1b[J');
 }
 
 function watch() {
@@ -1696,6 +1802,17 @@ function watch() {
   let seenEvo = p.evolution && p.evolution.at;
   let seenBoxes = p.lastBoxes && p.lastBoxes.t;
   let seenCraft = p.lastCraft && p.lastCraft.t;
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.on('exit', () => { try { process.stdin.setRawMode(false); } catch {} });
+    process.stdin.on('data', (d) => {
+      const k = d.toString();
+      if (k === 'q' || k === '\u0003') process.exit(0);
+      if (k === 'g') setConfig('gear', loadConfig().gear === false);
+      if (k === 'r' && p.lastFight) { queue.length = 0; queue.push(...fightFrames(p.lastFight, p.name)); }
+    });
+  }
   setInterval(() => {
     if (frame % 3 === 0) {
       try {

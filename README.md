@@ -25,7 +25,7 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
 ## Watching it
 
 - **Statusline:** a 16×16 pixel-art sprite plus a stats card showing level, HP, XP, ATK/ARM/EVA, all 5 gear slots, gold, potions and buffs. It refreshes once a second, so the pet bobs and blinks.
-- **`pet watch`:** the full animated view. Open it in a split next to Claude (e.g. Cmd+D in Ghostty). It replays every fight blow by blow, and shows crate openings, the crafting anvil, evolutions and the event log.
+- **`pet watch`:** the full animated view. Open it in a split next to Claude (e.g. Cmd+D in Ghostty). The arena replays every fight blow by blow and shows crate openings, the crafting anvil and evolutions; between fights the last foe waits on the right. Below it are a gear strip with item icons, stats and active buffs, and a log that collapses repeats. Keys: `q` quit, `g` gear on/off, `r` replay the last fight.
 
 ## How it plays
 
