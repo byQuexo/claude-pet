@@ -1366,6 +1366,24 @@ function renderPixels(pix, scale = 1) {
 
 const renderSprite = (art, opts = {}) => renderPixels(spritePixels(art, opts), opts.scale);
 
+// Halves an icon to 8×8 for the gear strip; each 2×2 patch keeps its main colour, so outlines don't swallow the art.
+function shrinkIcon(pix) {
+  const OUTLINE = '20,18,28';
+  const out = [];
+  for (let y = 0; y < pix.length; y += 2) {
+    const row = [];
+    for (let x = 0; x < pix[0].length; x += 2) {
+      const cell = [pix[y][x], pix[y][x + 1], pix[y + 1][x], pix[y + 1][x + 1]].filter(Boolean);
+      if (cell.length < 2) { row.push(null); continue; }
+      const counts = new Map();
+      for (const c of cell) { const k = c.join(); counts.set(k, (counts.get(k) || 0) + (k === OUTLINE ? 0.5 : 1)); }
+      row.push([...counts.entries()].sort((a, b) => b[1] - a[1])[0][0].split(',').map(Number));
+    }
+    out.push(row);
+  }
+  return out;
+}
+
 // Idle effects live outside the 16×16 body, so the watch view draws pets on a 24-wide canvas with persistent particles.
 const PET_W = 24, PET_X = 4;
 const SOLDIER = ['.kkk.', 'kekek', '.kkk.', 'kkkkk', 'k.k.k', '.k.k.', '.k.k.'];
@@ -1806,9 +1824,7 @@ function draw(p, f, frame) {
       ? renderSprite(composeChest(f.chest.id, f.chest.open), { scale, dy: f.chest.open ? 0 : frame % 2 ? -1 : 0, tint: f.chestFlash ? '#ffffff' : null, amount: f.chestFlash || 0 })
       : fightMon
         ? renderSprite(composeMonster(fightMon), { scale, dy: frame % 4 < 2 ? 0 : -1, gray: f.monGray, dissolve: f.dissolve, slash: f.slash, tint: f.monTint ? f.monTintColor || '#ff1744' : fightMon.secret && frame % 9 === 0 ? '#ffd54f' : null, amount: f.monTint || (fightMon.secret ? 0.35 : 0) })
-        : idleFoe
-          ? renderSprite(composeMonster(idleFoe), { scale, gray: true, tint: '#1c1b26', amount: 0.55 })
-          : [];
+        : [];
   const shake = f.shake === true ? 1 : f.shake === 'back' ? -1 : 0;
   const petDx = (f.petDx || 0) + shake, monDx = (f.monDx || (f.chest && f.chest.dx) || 0) - shake;
   const monCol = W - 16 * scale - 2;
@@ -1821,7 +1837,7 @@ function draw(p, f, frame) {
   const barW = Math.max(8, Math.min(22, monCol - 18));
   const need = xpToNext(p.level);
   const weak = fightMon && MONSTERS[fightMon.kind].weak;
-  const rightHp = fightMon ? bar(f.mhp / fightMon.maxHp, 16 * scale - 2, hpColor(f.mhp / fightMon.maxHp)) : idleFoe ? dim(`last: ${idleFoe.name} (Lv ${idleFoe.level})`) : '';
+  const rightHp = fightMon ? bar(f.mhp / fightMon.maxHp, 16 * scale - 2, hpColor(f.mhp / fightMon.maxHp)) : idleFoe ? dim(`last: ${idleFoe.name} (Lv ${idleFoe.level}), ${p.lastFight.result === 'win' ? 'defeated' : p.lastFight.result === 'loss' ? 'won' : 'escaped'}`) : '';
   const town = TOWN_EVERY - (p.stats.fights % TOWN_EVERY);
   const rightXp = fightMon ? color(fightMon.boss ? '#ff5252' : '#d9d4ee', `${fightMon.name} Lv${fightMon.level}`) + (weak ? ` ${dim(`weak ${ELEMENTS[weak].icon}`)}` : '') : dim(`town & full heal in ${town} fight${town > 1 ? 's' : ''}`);
   const rightAt = (txt) => Math.max(1, W - cellWidth(txt) - 1);
@@ -1838,13 +1854,13 @@ function draw(p, f, frame) {
 
   const gearShown = loadConfig().gear !== false;
   out.push(rule(gearShown ? 'GEAR' : 'GEAR · hidden on the pet (g)'));
-  const roomy = rows - out.length >= 26;
+  const roomy = rows - out.length >= 22;
   if (roomy) {
     const per = Math.max(1, Math.min(5, Math.floor((W - 1) / 18)));
     for (let c = 0; c < SLOTS.length; c += per) {
       const chunk = SLOTS.slice(c, c + per);
-      const icons = chunk.map((slot) => { const it = p.gear[slot]; return it ? renderPixels(iconPixels(iconKind(it), it.rarity, it.element, frame >> 2)) : []; });
-      for (let r = 0; r < 8; r++) out.push(fit(' ' + icons.map((ls) => fit(ls[r] || '', 16) + '  ').join(''), W));
+      const icons = chunk.map((slot) => { const it = p.gear[slot]; return it ? renderPixels(shrinkIcon(iconPixels(iconKind(it), it.rarity, it.element, frame >> 2))) : []; });
+      for (let r = 0; r < 4; r++) out.push(fit(' ' + icons.map((ls) => fit(`    ${ls[r] || ''}`, 16) + '  ').join(''), W));
       out.push(fit(' ' + chunk.map((slot) => { const it = p.gear[slot]; return fit(it ? color(RARITY[it.rarity].color, `${it.unique ? '★ ' : it.set ? '◆ ' : it.element ? `${ELEMENTS[it.element].icon} ` : ''}${it.name}`) : dim(`— no ${slot} —`), 16) + '  '; }).join(''), W));
       out.push(fit(' ' + chunk.map((slot) => fit(p.gear[slot] ? `${color('#d9d4ee', `PWR ${Math.round(itemPower(p.gear[slot]))}`)} ${dim(topStats(p.gear[slot]).split(' ').slice(0, 2).join(' '))}` : '', 16) + '  ').join(''), W));
     }
@@ -1860,7 +1876,7 @@ function draw(p, f, frame) {
     [['RES', pct(Math.min(0.75, s.resist))], ['MULTI', pct(s.multi)], ['REGEN', `+${pct(s.regen)}`]],
   ].map((r) => ' ' + r.map(([k, v]) => fit(`${dim(k)} ${v}`, 11)).join(''));
   const active = [
-    ...p.buffs.map((b) => color('#ff9e64', `${BUFFS[b.id].icon} ${BUFFS[b.id].name}`) + dim(` ${b.fights} fights`)),
+    ...p.buffs.map((b) => color('#ff9e64', `${BUFFS[b.id].icon} ${BUFFS[b.id].name}`) + dim(` ${b.fights} fight${b.fights === 1 ? '' : 's'}`)),
     ...(Object.keys(p.bonus).length ? [dim(`📖 tomes ${Object.entries(p.bonus).map(([k, v]) => `+${['crit', 'lifesteal', 'regen', 'resist'].includes(k) ? pct(v) : r1(v)} ${k}`).join(' · ')}`)] : []),
     ...(p.monarch ? [color('#a66bff', `🌑 shadow army ${p.shadows}/3`)] : []),
     ...(p.stage === 0 ? [dim('🥚 studying how you code (pet seed)')] : []),
