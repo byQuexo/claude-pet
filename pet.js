@@ -1793,14 +1793,33 @@ function shortAgo(t) {
 const LOG_ICON = { fight: '⚔', boss: '☠', faint: 'z', level: '⬆', evolve: '✨', wake: '☀', flee: '~', town: '⌂', shop: '$', box: '🎁', craft: '⚒', code: '⌨' };
 const LOG_COLOR = { boss: '#ff5252', evolve: '#ffd700', level: '#69f0ae', faint: '#9e9e9e', town: '#80cbc4', shop: '#ffd54f', box: '#e040fb', craft: '#ffb74d', code: '#4dd0e1' };
 
+// A rarity-framed tile around the shrunk icon: 10×10 pixels, so 10 columns × 5 rows in the terminal.
+function gearTile(it, t) {
+  const rc = it ? RARITY[it.rarity].color : '#3a3650';
+  const edge = hex(it ? mixHex(rc, '#0d0b16', it.rarity >= 3 ? 0.05 : 0.35) : '#2e2a40');
+  const fill = hex(mixHex(rc, '#0d0b16', it ? 0.84 : 0.9));
+  const tile = Array.from({ length: 10 }, (_, y) => Array.from({ length: 10 }, (_, x) => {
+    const onEdge = x === 0 || y === 0 || x === 9 || y === 9;
+    const corner = (x === 0 || x === 9) && (y === 0 || y === 9);
+    return corner ? null : onEdge ? edge : fill;
+  }));
+  if (it) shrinkIcon(iconPixels(iconKind(it), it.rarity, it.element, t)).forEach((row, y) => row.forEach((c, x) => { if (c) tile[y + 1][x + 1] = c; }));
+  if (it && it.rarity >= 3) { const [x, y] = [[1, 1], [8, 1], [8, 8], [1, 8]][t % 4]; tile[y][x] = [255, 255, 255]; }
+  return renderPixels(tile);
+}
+
 function draw(p, f, frame) {
   const cols = process.stdout.columns || 80, rows = process.stdout.rows || 24;
-  const W = Math.min(cols, 112);
-  const scale = cols >= 100 && rows >= 60 ? 2 : 1;
+  const W = Math.min(cols, 112), IW = W - 4;
+  const scale = cols >= 90 && rows >= 56 ? 2 : 1;
   const s = petStats(p);
   const dim = (t) => color('#8a849f', t);
-  const line = (n) => color('#3a3650', '─'.repeat(Math.max(0, n)));
-  const rule = (label) => (label ? `${line(2)} ${color('#6d6690', label)} ${line(W - 4 - label.length)}` : line(W));
+  const B = (t) => color('#3a3650', t);
+  const label = (t) => color('#6d6690', t.split('').join(' '));
+  // Borders are placed with absolute cursor moves, so a mis-measured emoji can never push them out of line.
+  const row = (content) => `${B('│')} ${fit(content, IW)}\x1b[${W}G${B('│')}`;
+  const split = (D, left, right) => `${B('│')} ${fit(left, D - 3)}\x1b[${D}G${B('│')} ${fit(right, W - D - 3)}\x1b[${W}G${B('│')}`;
+  const hline = (l, r, mid, D) => B(l + (D ? '─'.repeat(D - 2) + mid + '─'.repeat(W - D - 1) : '─'.repeat(W - 2)) + r);
   const out = [];
 
   const fightMon = f.fight && !f.monGone ? f.fight.monster : null;
@@ -1809,9 +1828,10 @@ function draw(p, f, frame) {
 
   const tags = [...(p.badges || []).map((b) => color('#ffd54f', `🏅 ${b.name}`)), p.shiny && color('#ffd54f', '✦ shiny'), p.nature && dim(p.nature), p.branch && p.stage >= 2 && color(BRANCHES[p.branch].mark, `${BRANCHES[p.branch].cls} class`)].filter(Boolean).join(dim(' · '));
   const purse = `${color('#ffd54f', `💰 ${p.gold}g`)}  🎁 ${p.boxes.length}  ${color('#69f0ae', `🧪 ${p.potions}/${MAX_POTIONS}`)}`;
-  const head = ` ${color('#ffd700', '✦')} ${color('#ffffff', `\x1b[1m${p.name}`)} ${dim('the')} ${color('#ffffff', formName(form))} ${color('#ffd700', `Lv ${p.level}`)}${tags ? `  ${tags}` : ''}`;
-  out.push(fit(head, Math.max(10, W - cellWidth(purse) - 1)) + purse);
-  out.push(rule());
+  const head = `${color('#ffffff', `\x1b[1m${p.name}`)} ${dim('the')} ${color('#ffffff', formName(form))} ${color('#ffd700', `Lv ${p.level}`)}${tags ? `  ${tags}` : ''}`;
+  out.push(hline('╭', '╮'));
+  out.push(row(fit(head, Math.max(10, IW - cellWidth(purse) - 1)) + purse));
+  out.push(hline('├', '┤'));
 
   const petArt = composePet(form, p, { blink: !f.fight && frame % 23 === 0, sparkle: frame % 8 < 4, t: frame >> 1 });
   const petLines = renderPixels(petCanvas(petArt, form, frame, {
@@ -1819,7 +1839,7 @@ function draw(p, f, frame) {
     gray: f.petGray || resting, burst: f.burst,
     tint: f.flash ? '#ffffff' : f.petTint ? f.petTintColor || '#ff1744' : null, amount: f.flash || f.petTint || 0,
   }, frame, p.shadows || 0), scale);
-  const idleFoe = !fightMon && !f.chest && !f.anvil && !f.fight && p.lastFight ? p.lastFight.monster : null;
+  const lastFoe = !fightMon && !f.chest && !f.anvil && !f.fight && p.lastFight ? p.lastFight : null;
   const monLines = f.anvil
     ? renderSprite(composeAnvil(f.anvil.spark), { scale, tint: f.anvilFlash ? '#ffffff' : null, amount: f.anvilFlash || 0 })
     : f.chest
@@ -1829,57 +1849,56 @@ function draw(p, f, frame) {
         : [];
   const shake = f.shake === true ? 1 : f.shake === 'back' ? -1 : 0;
   const petDx = (f.petDx || 0) + shake, monDx = (f.monDx || (f.chest && f.chest.dx) || 0) - shake;
-  const monCol = W - 16 * scale - 2;
-  for (let i = 0; i < petLines.length; i++) {
-    const left = ' '.repeat(Math.max(0, 1 + petDx * scale)) + petLines[i];
-    const mStart = Math.max(1, monCol + monDx * scale);
-    out.push(fit(fit(left, mStart) + (monLines[i] || ''), W));
-  }
-  const php = f.fight ? f.php : p.hp, pmax = f.fight ? f.fight.petMaxHp : s.maxHp;
-  const barW = Math.max(8, Math.min(22, monCol - 18));
-  const need = xpToNext(p.level);
-  const weak = fightMon && MONSTERS[fightMon.kind].weak;
-  const rightHp = fightMon ? bar(f.mhp / fightMon.maxHp, 16 * scale - 2, hpColor(f.mhp / fightMon.maxHp)) : idleFoe ? dim(`last: ${idleFoe.name} (Lv ${idleFoe.level}), ${p.lastFight.result === 'win' ? 'defeated' : p.lastFight.result === 'loss' ? 'won' : 'escaped'}`) : '';
-  const town = TOWN_EVERY - (p.stats.fights % TOWN_EVERY);
-  const rightXp = fightMon ? color(fightMon.boss ? '#ff5252' : '#d9d4ee', `${fightMon.name} Lv${fightMon.level}`) + (weak ? ` ${dim(`weak ${ELEMENTS[weak].icon}`)}` : '') : dim(`town & full heal in ${town} fight${town > 1 ? 's' : ''}`);
-  const rightAt = (txt) => Math.max(1, W - cellWidth(txt) - 1);
-  const hpL = ` ${color('#e53935', '♥')} ${bar(php / pmax, barW, hpColor(php / pmax))} ${dim(`${Math.round(php)}/${pmax}`)}`;
-  const xpL = ` ${color('#4fa3ff', '✦')} ${bar(p.xp / need, barW, '#4fa3ff')} ${dim(`${p.xp}/${need} XP`)}`;
-  out.push(fit(fit(hpL, fightMon ? monCol : rightAt(rightHp)) + rightHp, W));
-  out.push(fit(fit(xpL, fightMon ? Math.min(monCol, rightAt(rightXp)) : rightAt(rightXp)) + rightXp, W));
+  const monCol = IW - 16 * scale - 1;
   let caption = f.caption;
   if (!caption) {
     if (resting) caption = [`z Z z  fainted, back in ${p.faint} ticks`, '#9e9e9e'];
     else caption = [['patrolling the codebase', 'sniffing for bugs', 'guarding your diff', 'waiting for monsters'][Math.floor(frame / 40) % 4] + '.'.repeat(1 + (frame >> 2) % 3), '#7a7a7a'];
   }
-  out.push(fit(center(color(caption[1], `\x1b[1m${caption[0]}`), W), W));
+  for (let i = 0; i < petLines.length; i++) {
+    const left = ' '.repeat(Math.max(0, petDx * scale)) + petLines[i];
+    out.push(row(fit(fit(left, Math.max(1, monCol + monDx * scale)) + (monLines[i] || ''), IW)));
+  }
+  out.push(row(center(color(caption[1], `\x1b[1m${caption[0]}`), IW)));
+  const php = f.fight ? f.php : p.hp, pmax = f.fight ? f.fight.petMaxHp : s.maxHp;
+  const barW = Math.max(8, Math.min(22, monCol - 18));
+  const need = xpToNext(p.level);
+  const weak = fightMon && MONSTERS[fightMon.kind].weak;
+  const town = TOWN_EVERY - (p.stats.fights % TOWN_EVERY);
+  const rightHp = fightMon ? bar(f.mhp / fightMon.maxHp, 16 * scale - 2, hpColor(f.mhp / fightMon.maxHp)) : lastFoe ? dim(`last: ${lastFoe.monster.name} (Lv ${lastFoe.monster.level}), ${lastFoe.result === 'win' ? 'defeated' : lastFoe.result === 'loss' ? 'won' : 'escaped'}`) : '';
+  const rightXp = fightMon ? color(fightMon.boss ? '#ff5252' : '#d9d4ee', `${fightMon.name} Lv${fightMon.level}`) + (weak ? ` ${dim(`weak ${ELEMENTS[weak].icon}`)}` : '') : dim(`town & full heal in ${town} fight${town > 1 ? 's' : ''}`);
+  const rightAt = (txt) => Math.max(1, IW - cellWidth(txt));
+  const hpL = `${color('#e53935', '♥')} ${bar(php / pmax, barW, hpColor(php / pmax))} ${`${Math.round(php)}/${pmax}`}`;
+  const xpL = `${color('#4fa3ff', '✦')} ${bar(p.xp / need, barW, '#4fa3ff')} ${`${p.xp}/${need} XP`}`;
+  out.push(row(fit(hpL, fightMon ? monCol : rightAt(rightHp)) + rightHp));
+  out.push(row(fit(xpL, fightMon ? Math.min(monCol, rightAt(rightXp)) : rightAt(rightXp)) + rightXp));
 
+  out.push(hline('├', '┤'));
   const gearShown = loadConfig().gear !== false;
-  out.push(rule(gearShown ? 'GEAR' : 'GEAR · hidden on the pet (g)'));
-  const roomy = rows - out.length >= 22;
+  out.push(row(label('GEAR') + (gearShown ? '' : dim('   · hidden on the pet (g)'))));
+  const roomy = rows - out.length >= 20;
   if (roomy) {
-    const per = Math.max(1, Math.min(5, Math.floor((W - 1) / 18)));
+    const per = IW >= 80 ? 5 : IW >= 50 ? 3 : 2;
+    const colW = Math.floor(IW / per);
     for (let c = 0; c < SLOTS.length; c += per) {
       const chunk = SLOTS.slice(c, c + per);
-      const icons = chunk.map((slot) => { const it = p.gear[slot]; return it ? renderPixels(shrinkIcon(iconPixels(iconKind(it), it.rarity, it.element, frame >> 2))) : []; });
-      for (let r = 0; r < 4; r++) out.push(fit(' ' + icons.map((ls) => fit(`    ${ls[r] || ''}`, 16) + '  ').join(''), W));
-      out.push(fit(' ' + chunk.map((slot) => { const it = p.gear[slot]; return fit(it ? color(RARITY[it.rarity].color, `${it.unique ? '★ ' : it.set ? '◆ ' : it.element ? `${ELEMENTS[it.element].icon} ` : ''}${it.name}`) : dim(`— no ${slot} —`), 16) + '  '; }).join(''), W));
-      out.push(fit(' ' + chunk.map((slot) => fit(p.gear[slot] ? `${color('#d9d4ee', `PWR ${Math.round(itemPower(p.gear[slot]))}`)} ${dim(topStats(p.gear[slot]).split(' ').slice(0, 2).join(' '))}` : '', 16) + '  ').join(''), W));
+      const tiles = chunk.map((slot) => gearTile(p.gear[slot], frame >> 2));
+      const pad = ' '.repeat(Math.max(0, Math.floor((colW - 10) / 2)));
+      for (let r = 0; r < 5; r++) out.push(row(tiles.map((ls) => fit(pad + ls[r], colW)).join('')));
+      out.push(row(chunk.map((slot) => { const it = p.gear[slot]; const n = it ? color(RARITY[it.rarity].color, `${it.unique ? '★ ' : it.set ? '◆ ' : it.element ? `${ELEMENTS[it.element].icon} ` : ''}${it.name}`) : dim(`no ${slot}`); return fit(center(fit(n, Math.min(cellWidth(n), colW - 2)), colW), colW); }).join('')));
+      out.push(row(chunk.map((slot) => { const it = p.gear[slot]; const t = it ? `PWR ${Math.round(itemPower(it))} · ${topStats(it).split(' ').slice(0, 2).join(' ')}` : ''; return fit(center(dim(fit(t, Math.min(t.length, colW - 2))), colW), colW); }).join('')));
     }
   } else {
-    for (const slot of SLOTS) { const it = p.gear[slot]; out.push(fit(` ${dim(GEAR_ICON[slot])} ${it ? `${color(RARITY[it.rarity].color, it.name)} ${dim(topStats(it))}` : dim('—')}`, W)); }
+    for (const slot of SLOTS) { const it = p.gear[slot]; out.push(row(`${dim(GEAR_ICON[slot])} ${it ? `${color(RARITY[it.rarity].color, it.name)} ${dim(topStats(it))}` : dim('—')}`)); }
   }
 
-  out.push(rule('STATS · ACTIVE'));
   const pct = (v) => `${Math.round(v * 100)}%`;
-  const statRows = [
-    [['ATK', Math.round(s.atk)], ['ARM', Math.round(s.def)], ['EVA', pct(evadeChance(s.evasion, p.level))]],
-    [['SPD', Math.round(s.spd)], ['CRIT', pct(s.crit)], ['LIFE', pct(s.lifesteal)]],
-    [['RES', pct(Math.min(0.75, s.resist))], ['MULTI', pct(s.multi)], ['REGEN', `+${pct(s.regen)}`]],
-  ].map((r) => ' ' + r.map(([k, v]) => fit(`${dim(k)} ${v}`, 11)).join(''));
+  const cells = [['ATK', Math.round(s.atk)], ['ARM', Math.round(s.def)], ['EVA', pct(evadeChance(s.evasion, p.level))], ['SPD', Math.round(s.spd)], ['CRIT', pct(s.crit)], ['LIFE', pct(s.lifesteal)], ['RES', pct(Math.min(0.75, s.resist))], ['MULTI', pct(s.multi)], ['REGEN', `+${pct(s.regen)}`]];
+  const statRows = [];
+  for (let i = 0; i < cells.length; i += 4) statRows.push(cells.slice(i, i + 4).map(([k, v]) => fit(`${dim(k)} ${v}`, 11)).join(''));
   const active = [
     ...p.buffs.map((b) => color('#ff9e64', `${BUFFS[b.id].icon} ${BUFFS[b.id].name}`) + dim(` ${b.fights} fight${b.fights === 1 ? '' : 's'}`)),
-    ...(Object.keys(p.bonus).length ? [dim(`📖 tomes ${Object.entries(p.bonus).map(([k, v]) => `+${['crit', 'lifesteal', 'regen', 'resist'].includes(k) ? pct(v) : r1(v)} ${k}`).join(' · ')}`)] : []),
+    ...(Object.keys(p.bonus).length ? [dim(`📖 tomes · ${Object.entries(p.bonus).map(([k, v]) => `+${['crit', 'lifesteal', 'regen', 'resist'].includes(k) ? pct(v) : r1(v)} ${k.toUpperCase()}`).join(' · ')}`)] : []),
     ...(p.monarch ? [color('#a66bff', `🌑 shadow army ${p.shadows}/3`)] : []),
     ...(p.stage === 0 ? [dim('🥚 studying how you code (pet seed)')] : []),
   ];
@@ -1891,19 +1910,28 @@ function draw(p, f, frame) {
   if ((p.badges || []).length) active.push(color('#ffd54f', '🏅 +5% XP forever'));
   if (!active.length) active.push(dim('no buffs right now'));
   if (W >= 74) {
-    for (let i = 0; i < Math.max(statRows.length, active.length); i++) out.push(fit(fit(statRows[i] || '', 36) + color('#3a3650', '│ ') + (active[i] || ''), W));
+    const D = 2 + Math.floor(IW / 2);
+    out.push(hline('├', '┤', '┬', D));
+    out.push(split(D, label('STATS'), label('ACTIVE')));
+    for (let i = 0; i < Math.max(statRows.length, active.length); i++) out.push(split(D, statRows[i] || '', active[i] || ''));
+    out.push(hline('├', '┤', '┴', D));
   } else {
-    for (const r of statRows) out.push(fit(r, W));
-    for (const a of active) out.push(fit(' ' + a, W));
+    out.push(hline('├', '┤'));
+    out.push(row(label('STATS')));
+    for (const r of statRows) out.push(row(r));
+    out.push(row(label('ACTIVE')));
+    for (const a of active) out.push(row(a));
+    out.push(hline('├', '┤'));
   }
 
-  out.push(rule('LOG'));
-  const room = rows - out.length - 2;
-  for (const e of compactLog(p.log).slice(0, Math.max(0, room))) out.push(fit(` ${color('#6d6690', shortAgo(e.t).padStart(3))} ${LOG_ICON[e.type] || '·'} ${color(LOG_COLOR[e.type] || '#c9c3e6', e.text)}`, W));
-  while (out.length < rows - 2) out.push('');
-  out.push(rule());
+  out.push(row(label('LOG')));
+  const room = rows - out.length - 3;
+  for (const e of compactLog(p.log).slice(0, Math.max(0, room))) out.push(row(`${color('#6d6690', shortAgo(e.t).padStart(3))} ${LOG_ICON[e.type] || '·'} ${color(LOG_COLOR[e.type] || '#c9c3e6', e.text)}`));
+  while (out.length < rows - 3) out.push(row(''));
+  out.push(hline('├', '┤'));
   const keys = color('#5a5a5a', 'q quit · g gear · r replay');
-  out.push(fit(dim(` kills ${p.stats.kills} · bosses ${p.stats.bosses} · faints ${p.stats.faints} · items ${p.stats.items} · crafted ${p.stats.crafted || 0}`), Math.max(0, W - cellWidth(keys) - 1)) + keys);
+  out.push(row(fit(dim(`kills ${p.stats.kills} · bosses ${p.stats.bosses} · faints ${p.stats.faints} · items ${p.stats.items} · crafted ${p.stats.crafted || 0}`), Math.max(0, IW - cellWidth(keys))) + keys));
+  out.push(hline('╰', '╯'));
   process.stdout.write('\x1b[H' + out.slice(0, rows).map((l) => l + RESET + '\x1b[K').join('\n') + '\x1b[J');
 }
 
