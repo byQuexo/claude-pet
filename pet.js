@@ -738,12 +738,12 @@ function makeItem(level, weights, forced = {}) {
   return { name, slot, type, element, rarity: ri, level, stats, affixes: affixes.map((a) => a.name), set };
 }
 
-// Uniques grow with the pet, so a lucky early drop stays worth wearing.
+// Uniques and the locked Abyssal Scythe grow with the pet, so neither falls behind its level.
 function levelUniques(p) {
   for (const it of [...Object.values(p.gear), ...p.inventory]) {
-    if (!it || !it.unique || it.level >= p.level) continue;
+    if (!it || !(it.unique || it.locked) || it.level >= p.level) continue;
     it.level = p.level;
-    it.stats = UNIQUES[it.unique].stats(p.level);
+    it.stats = it.unique ? UNIQUES[it.unique].stats(p.level) : makeAbyssalScythe(p.level).stats;
     const f = Math.pow(1.1, it.plus || 0);
     for (const k of Object.keys(it.stats)) if (k !== 'multi' && k !== 'thorns') it.stats[k] = k === 'maxHp' ? Math.round(it.stats[k] * f) : r2(it.stats[k] * f);
   }
@@ -1318,6 +1318,7 @@ function composePet(form, p, opts = {}) {
   if (fx === 'fire' && t % 2) [pal.f, pal.r] = [pal.r, pal.f];
   if (fx === 'monarch') { if (t % 2) { pal.p = '#d9b8ff'; pal.x = '#ff2a2a'; } if (t % 3 === 0) { pal.e = '#7fe3ff'; pal.q = '#ffb347'; } }
   if (form.stage >= 1 && p && loadConfig().gear !== false) dressPet(grid, pal, key, p.gear, opts);
+  if (opts.glint) for (const k of ['e', 'y', 'f', 'r', 'g', 'p', 'x', 'q', 'E']) if (pal[k]) pal[k] = mixHex(pal[k], '#ffffff', 0.35);
   if (opts.blink) for (const row of grid) for (let c = 0; c < 16; c++) if (row[c] === 'e' || row[c] === 'w') row[c] = 'b';
   return { grid, pal };
 }
@@ -1496,10 +1497,15 @@ function cellWidth(str) {
   return w;
 }
 
+const STATUS_PET = 12;
+
+// The statusline draws a 12-pixel pet at a fixed 6 rows: moving it would change the row count and jolt the whole bar,
+// so only eyes, flames and other accents glint while the body stays still.
 function petSprite(p) {
   const beat = Math.floor(Date.now() / 1000);
-  return renderSprite(composePet(formOf(p), p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0, t: beat }), { dy: beat % 2 ? 0 : -1, gray: p.faint > 0 })
-    .filter((l) => /[▀▄]/.test(l));
+  const pix = spritePixels(composePet(formOf(p), p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0, t: beat, glint: beat % 2 === 0 }), { gray: p.faint > 0 }).slice(1, 17);
+  const n = STATUS_PET;
+  return renderPixels(Array.from({ length: n }, (_, y) => Array.from({ length: n }, (_, x) => pix[Math.floor(((y + 0.5) * 16) / n)][Math.floor(((x + 0.5) * 16) / n)])));
 }
 
 // COLUMNS is the full terminal width, but Claude Code pads the statusline and cuts longer lines with "…",
@@ -1507,7 +1513,7 @@ function petSprite(p) {
 const STATUS_MARGIN = 6;
 function besideRight(left, sprite, cfg) {
   const width = cfg.width || parseInt(process.env.COLUMNS, 10) || 80;
-  const col = width - 16 - STATUS_MARGIN;
+  const col = width - STATUS_PET - STATUS_MARGIN;
   const start = left.slice(0, sprite.length).some((l) => cellWidth(l) >= col) ? left.length : 0;
   const out = [];
   for (let i = 0; i < Math.max(left.length, start + sprite.length); i++) {
@@ -1577,10 +1583,7 @@ function setConfig(key, value) {
 function spriteCard(p) {
   const s = petStats(p), need = xpToNext(p.level), hpF = p.hp / s.maxHp;
   const dim = (t) => color('#8a8a8a', t);
-  // Redraws are event-driven, so the clock picks a bob/blink frame instead of a timer.
-  const beat = Math.floor(Date.now() / 1000);
-  const sprite = renderSprite(composePet(formOf(p), p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0, t: beat }), { dy: beat % 2 ? 0 : -1, gray: p.faint > 0 })
-    .filter((l) => /[▀▄]/.test(l));
+  const sprite = petSprite(p);
   const gear = (slot, n) => {
     const it = p.gear[slot];
     const icon = it && it.element ? ELEMENTS[it.element].icon : GEAR_ICON[slot];
@@ -1602,7 +1605,7 @@ function spriteCard(p) {
   ];
   const rows = Math.max(sprite.length, card.length);
   const out = [];
-  for (let i = 0; i < rows; i++) out.push(`${sprite[i] || ' '.repeat(16)}  ${card[i] || ''}`);
+  for (let i = 0; i < rows; i++) out.push(`${sprite[i] || ' '.repeat(STATUS_PET)}  ${card[i] || ''}`);
   return out;
 }
 
