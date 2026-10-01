@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
+const crypto = require('crypto');
 
 const HOME = process.env.CLAUDE_PET_HOME || path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'claude-pet');
 const STATE = path.join(HOME, 'state.json');
@@ -1152,10 +1153,7 @@ function statusline() {
   let input = '';
   try { input = fs.readFileSync(0, 'utf8'); } catch {}
   const cfg = loadConfig();
-  let inner = '';
-  if (cfg.inner) {
-    try { inner = execFileSync('/bin/sh', ['-c', cfg.inner], { input, encoding: 'utf8', timeout: 4000, stdio: ['pipe', 'pipe', 'ignore'] }); } catch (e) { inner = e.stdout || ''; }
-  }
+  const inner = cfg.inner ? runInner(cfg.inner, input) : '';
   const innerLines = inner ? inner.replace(/\n$/, '').split('\n') : [];
   const p = load();
   const mode = statusMode(cfg);
@@ -1165,6 +1163,30 @@ function statusline() {
   }
   const lines = mode === 'minimal' ? besideRight(innerLines, petSprite(p), cfg) : [...innerLines, ...(mode === 'compact' ? statusLines(p) : spriteCard(p))];
   process.stdout.write(lines.join('\n') + '\n');
+}
+
+// The 1s refresh would otherwise re-run the wrapped statusline every second even when nothing it shows changed.
+function runInner(command, input) {
+  let key = '', session = 'default';
+  try {
+    const j = JSON.parse(input);
+    session = String(j.session_id || 'default').replace(/[^\w-]/g, '').slice(0, 64);
+    if (j.cost) { delete j.cost.total_duration_ms; delete j.cost.total_api_duration_ms; }
+    key = crypto.createHash('sha1').update(command + JSON.stringify(j)).digest('hex');
+  } catch {}
+  const file = path.join(HOME, `inner-${session}.json`);
+  try {
+    const c = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (key && c.key === key && Date.now() - c.t < 10000) return c.out;
+  } catch {}
+  let out = '';
+  try { out = execFileSync('/bin/sh', ['-c', command], { input, encoding: 'utf8', timeout: 4000, stdio: ['pipe', 'pipe', 'ignore'] }); } catch (e) { out = e.stdout || ''; }
+  try {
+    fs.mkdirSync(HOME, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ key, t: Date.now(), out }));
+    if (Math.random() < 0.02) for (const f of fs.readdirSync(HOME)) if (/^inner-.*\.json$/.test(f) && Date.now() - fs.statSync(path.join(HOME, f)).mtimeMs > 86400000) fs.rmSync(path.join(HOME, f), { force: true });
+  } catch {}
+  return out;
 }
 
 const MODES = ['full', 'minimal', 'compact'];
