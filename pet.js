@@ -5,7 +5,7 @@ const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
 const crypto = require('crypto');
-const { FORMS, MONSTER_ART, MONSTER_PALS, GEAR_ANCHORS } = require('./art.js');
+const { FORMS, MONSTER_ART, MONSTER_PALS, GEAR_ANCHORS, SECRET_BOSS } = require('./art.js');
 
 const HOME = process.env.CLAUDE_PET_HOME || path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'claude-pet');
 const STATE = path.join(HOME, 'state.json');
@@ -282,6 +282,20 @@ for (const [kind, art] of Object.entries(MONSTER_ART)) {
   ART[kind] = art;
   MONSTERS[kind].pals = [MONSTER_PALS[kind], shiftPal(MONSTER_PALS[kind], 50), shiftPal(MONSTER_PALS[kind], -70)];
 }
+function secretBoss() {
+  try {
+    const o = JSON.parse(fs.readFileSync(path.join(HOME, 'secret-boss.json'), 'utf8'));
+    if (Array.isArray(o.rows) && o.rows.length === 16 && o.rows.every((r) => typeof r === 'string' && r.length === 16) && o.pal) return { ...SECRET_BOSS, ...o };
+  } catch {}
+  return SECRET_BOSS;
+}
+const SECRET = secretBoss();
+ART.secret = SECRET.rows;
+MONSTERS.secret = {
+  names: [SECRET.name], hp: 1, atk: 1, def: 1.2, spd: 1.05, weak: null, resist: null, attack: null, proc: 0, evade: 0.1,
+  pals: [SECRET.pal], secretOnly: true,
+};
+const SECRET_CHANCE = 1 / 1000;
 const BOSS_KINDS = ['boss', 'kraken'];
 const ELITE_KINDS = ['mimic', 'hydra'];
 const KINDS_BY_BUCKET = {
@@ -367,7 +381,7 @@ const BOXES = {
   gold: { name: 'Golden Crate', color: '#ffca28', items: 3, weights: [0, 40, 45, 15], gold: [50, 150], extras: 1 },
   mythic: { name: 'Mythic Chest', color: '#e040fb', items: 3, weights: [0, 0, 60, 40], gold: [100, 300], extras: 2 },
 };
-const KIND_LABEL = { slime: 'slimes', ghost: 'ghosts', bug: 'bugs', boss: 'bosses', ouroboros: 'loop serpents', cronbat: 'cron bats', skeleton: 'skeletons', turtle: 'turtles', mimic: 'mimics', hydra: 'hydras', kraken: 'krakens' };
+const KIND_LABEL = { slime: 'slimes', ghost: 'ghosts', bug: 'bugs', boss: 'bosses', ouroboros: 'loop serpents', secret: 'secret bosses', cronbat: 'cron bats', skeleton: 'skeletons', turtle: 'turtles', mimic: 'mimics', hydra: 'hydras', kraken: 'krakens' };
 const NAMES = ['Nibble', 'Bytey', 'Pixel', 'Segfault', 'Tofu', 'Kernel', 'Mochi', 'Glitch', 'Sprocket', 'Biscuit'];
 
 const STAGE_LEVELS = [1, 5, 15, 30];
@@ -413,6 +427,7 @@ function upgrade(p) {
   p.boxes = p.boxes || [];
   p.bonus = p.bonus || {};
   p.shadows = p.shadows || 0;
+  if (p.gear.weapon && p.gear.weapon.name === 'Abyssal Edge') Object.assign(p.gear.weapon, { name: 'Abyssal Scythe', type: 'scythe' });
   if (p.stage >= 1 && !p.species) rollSeed(p, { totalMix: p.totalMix, born: p.born, name: p.name });
   return p;
 }
@@ -433,18 +448,18 @@ function hatch(p) {
   log(p, 'evolve', `the egg cracks open: seed ${p.seed.slice(0, 8)} → a ${p.shiny ? 'shiny ' : ''}${p.nature} ${FORMS[SPECIES[p.species].forms[0]].name}!`);
 }
 
-function makeAbyssalEdge(level) {
-  return { name: 'Abyssal Edge', slot: 'weapon', type: 'sword', element: 'shadow', rarity: 5, level, stats: { atk: r1((1.5 + 0.7 * level) * 6), lifesteal: 0.15 }, affixes: [], locked: true };
+function makeAbyssalScythe(level) {
+  return { name: 'Abyssal Scythe', slot: 'weapon', type: 'scythe', element: 'shadow', rarity: 5, level, stats: { atk: r1((1.5 + 0.7 * level) * 6), lifesteal: 0.15 }, affixes: [], locked: true };
 }
 
 function ascend(p) {
   p.monarch = true;
   const old = p.gear.weapon;
   if (old) p.inventory.unshift(old);
-  p.gear.weapon = makeAbyssalEdge(p.level);
+  p.gear.weapon = makeAbyssalScythe(p.level);
   p.hp = Math.min(p.hp, petStats(p).maxHp);
   p.evolution = { at: Date.now(), from: { ...formOf(p), monarch: false }, to: formOf(p) };
-  log(p, 'evolve', `the shadows answer: ${p.name} rises as the Demon King, Monarch of Shadows, and takes up the Abyssal Edge`);
+  log(p, 'evolve', `the shadows answer: ${p.name} rises as the Demon King, Monarch of Shadows, and takes up the Abyssal Scythe`);
 }
 
 function save(p) {
@@ -589,6 +604,11 @@ function spawn(p, bucket, boss) {
   };
 }
 
+function spawnSecret(p) {
+  const m = spawn(p, null, true);
+  return Object.assign(m, { kind: 'secret', name: SECRET.name, pal: 0, secret: true, boss: true, elite: false, maxHp: Math.round((m.maxHp * 4) / 1.8), atk: (m.atk * 1.4) / 1.05 });
+}
+
 function fight(p, m) {
   const s = petStats(p), k = MONSTERS[m.kind];
   let php = p.hp, mhp = m.maxHp;
@@ -625,7 +645,7 @@ function fight(p, m) {
           push({ a: 'potion' });
           continue;
         }
-        if (php < s.maxHp * 0.15 && mhp > m.maxHp * 0.25 && Math.random() < 0.6) {
+        if (!m.secret && php < s.maxHp * 0.15 && mhp > m.maxHp * 0.25 && Math.random() < 0.6) {
           retreated = true;
           push({ a: 'retreat' });
           break;
@@ -984,7 +1004,9 @@ function tick(p, bucket, event, ctx = {}) {
   // A due boss waits until the pet has rested up, so it is never fought half-dead.
   const boss = p.stats.kills >= p.nextBoss && p.hp >= s.maxHp * 0.75;
   if (p.hp < s.maxHp * 0.5 && p.potions > 0) { p.potions--; p.hp = Math.min(s.maxHp, p.hp + Math.round(s.maxHp * 0.6)); }
-  const m = spawn(p, ambush ? 'edit' : bucket, boss && !ambush);
+  const secret = !ambush && Math.random() < SECRET_CHANCE;
+  const m = secret ? spawnSecret(p) : spawn(p, ambush ? 'edit' : bucket, boss && !ambush);
+  if (secret) log(p, 'boss', `the air goes still… ${SECRET.name} appears!`);
   if (ambush) Object.assign(m, { kind: 'bug', elite: true, name: 'Failing Test Hydra', maxHp: Math.round(m.maxHp * 1.4), atk: m.atk * 1.15 });
   const startHp = p.hp;
   const f = fight(p, m);
@@ -997,7 +1019,15 @@ function tick(p, bucket, event, ctx = {}) {
   p.buffs = p.buffs.filter((b) => b.fights > 0);
   if (f.result === 'win') {
     p.stats.kills++;
-    if (m.boss) { p.stats.bosses++; p.nextBoss = p.stats.kills + BOSS_EVERY; }
+    if (m.boss && !m.secret) { p.stats.bosses++; p.nextBoss = p.stats.kills + BOSS_EVERY; }
+    if (m.secret) {
+      p.badges = p.badges || [];
+      p.stats.secretKills = (p.stats.secretKills || 0) + 1;
+      if (!p.badges.some((b) => b.id === 'secret')) p.badges.push({ id: 'secret', name: `${SECRET.name} Slayer`, at: Date.now() });
+      p.boxes.push('mythic');
+      lf.badge = true;
+      log(p, 'boss', `🏅 ${p.name} defeated ${SECRET.name}! Badge earned: ${SECRET.name} Slayer · a Mythic Chest drops`);
+    }
     lf.xp = Math.round((6 + 3 * m.level) * (m.boss ? 5 : m.elite ? 2 : 1));
     lf.gold = Math.round((3 + 1.2 * m.level) * rand(0.7, 1.3) * (m.boss ? 5 : m.elite ? 2 : 1));
     p.gold += lf.gold;
@@ -1014,7 +1044,8 @@ function tick(p, bucket, event, ctx = {}) {
     for (const l of lf.loot) text += ` · ${l.equipped ? 'equipped' : 'found'} ${l.name}`;
     log(p, m.boss ? 'boss' : 'fight', text);
   } else if (f.result === 'loss') {
-    if (m.boss) p.nextBoss = p.stats.kills + 10;
+    if (m.boss && !m.secret) p.nextBoss = p.stats.kills + 10;
+    if (m.secret) log(p, 'boss', `${SECRET.name} laughs and vanishes. Who knows when he'll return…`);
     p.faint = FAINT_TICKS;
     p.stats.faints++;
     log(p, 'faint', `fainted against ${m.name} (Lv ${m.level})`);
@@ -1115,6 +1146,7 @@ const WEAPON_MINI = {
   axe: ['oo..', 'lmY.', 'lmY.', 'lmY.', 'oob.', '..b.', '..b.', '..Y.'],
   dagger: ['.o.', 'olo', 'olo', 'YyY', '.b.'],
   staff: ['oqo', 'qQk', 'oko', '.Y.', '.b.', '.b.', '.b.', '.b.'],
+  scythe: ['lmmo', 'l..b', '...b', '...b', '...b', '...b', '...b', '..Gb'],
 };
 const MINI_CHAR = { o: '!', l: '9', m: '0', Y: '4', y: '#', b: '$', G: '+', q: '%', Q: '&', k: '*' };
 const GEAR_FIT = [['#d0d4da', '#8f96a1'], ['#cfe4ff', '#7fa7d9'], ['#eadcff', '#b694e8'], ['#fff1a8', '#e0aa2e'], ['#ffd0c4', '#ff5a3c'], ['#e0aaff', '#5a2a8a']];
@@ -1259,7 +1291,7 @@ function petCanvas(art, form, frame, o, shadows) {
   } else if (kind === 'monarch') {
     for (let i = 0; i < 3; i++) ps.push({ x: PET_X - 2 + Math.random() * 20, y: 13 + Math.random() * 4, vx: (Math.random() - 0.5) * 0.25, vy: -0.25 - Math.random() * 0.3, life: 8, c: pick(['#140a26', '#2a0f4a', '#4b1d8a']) });
     if (Math.random() < 0.35) ps.push({ x: PET_X + pick([6, 9]), y: 5 + dy, vx: -0.6, vy: -0.1, life: 4, c: '#7fe3ff' });
-    if (Math.random() < 0.6) ps.push({ x: PET_X + 13 + Math.random() * 3, y: 10 + Math.random() * 6 + dy, vx: (Math.random() - 0.5) * 0.2, vy: -0.45, life: 5, c: pick(['#ff3a1a', '#8b0a0a', '#ffb347']) });
+    if (Math.random() < 0.6) ps.push({ x: PET_X + 6 + Math.random() * 9, y: 1 + Math.random() * 2 + dy, vx: (Math.random() - 0.5) * 0.25, vy: -0.4, life: 4, c: pick(['#ff3a1a', '#8b0a0a', '#ffb347']) });
     const phase = frame % 40, a = phase < 8 ? phase / 8 : phase < 28 ? 1 : Math.max(0, 1 - (phase - 28) / 8);
     [[0, 10], [PET_W - 5, 10]].slice(0, Math.min(2, shadows)).forEach(([sx, sy]) => SOLDIER.forEach((row, y) => [...row].forEach((ch, x) => {
       if (ch !== '.' && a > 0.15) set(sx + x, sy + y, mixRgb([0, 0, 0], hex(ch === 'e' ? '#7fe3ff' : '#2a1a52'), a));
@@ -1377,6 +1409,8 @@ function statLine(s, dim, level) {
   return t;
 }
 
+const badgeMark = (p) => ((p.badges || []).length ? ` ${color('#ffd54f', '🏅')}` : '');
+
 function buffLine(p) {
   const parts = p.buffs.map((b) => color('#ff7043', `${BUFFS[b.id].icon}${b.fights}`));
   if (p.potions) parts.unshift(color('#69f0ae', `🧪${p.potions}`));
@@ -1430,7 +1464,7 @@ function spriteCard(p) {
   const e = p.log[p.log.length - 1];
   const lean = leaning(p), next = STAGE_LEVELS[p.stage + 1];
   const card = [
-    `${color('#ffffff', `\x1b[1m${p.name}`)} ${dim(formName(p))} ${color('#ffd700', `Lv${p.level}`)} ${buffLine(p)}`,
+    `${color('#ffffff', `\x1b[1m${p.name}`)}${badgeMark(p)} ${dim(formName(p))} ${color('#ffd700', `Lv${p.level}`)} ${buffLine(p)}`,
     `${color('#e53935', '♥')} ${bar(hpF, 16, hpColor(hpF), '#3a3a3a', ['▰', '▱'])} ${dim(`${p.hp}/${s.maxHp}`)}`,
     `${color('#4fa3ff', '✦')} ${bar(p.xp / need, 16, '#4fa3ff', '#3a3a3a', ['▰', '▱'])} ${dim(`${p.xp}/${need}`)}`,
     statLine(s, dim, p.level),
@@ -1450,7 +1484,7 @@ function statusLines(p) {
   const s = petStats(p), need = xpToNext(p.level);
   const hpF = p.hp / s.maxHp;
   const dim = (t) => color('#8a8a8a', t);
-  let l1 = `${emoji(p)} ${color('#ffffff', `\x1b[1m${p.name}`)} ${dim(formName(p))} ${color('#ffd700', `Lv${p.level}`)} `;
+  let l1 = `${emoji(p)} ${color('#ffffff', `\x1b[1m${p.name}`)}${badgeMark(p)} ${dim(formName(p))} ${color('#ffd700', `Lv${p.level}`)} `;
   l1 += `${color('#e53935', '♥')}${bar(hpF, 8, hpColor(hpF), '#3a3a3a', ['▰', '▱'])} `;
   l1 += `${color('#4fa3ff', '✦')}${bar(p.xp / need, 8, '#4fa3ff', '#3a3a3a', ['▰', '▱'])}`;
   const w = p.gear.weapon;
@@ -1502,6 +1536,7 @@ function fightFrames(lf, name) {
         : { monGone: true, caption: [`${m.name} fled`, '#9e9e9e'] };
   if (lf.result === 'win') for (const d of [0.25, 0.5, 0.75]) frames.push(base({ dissolve: d, caption: label }));
   if (lf.arise) for (let i = 0; i < 10; i++) frames.push(base({ monGone: true, caption: ['A R I S E', '#a66bff'] }));
+  if (lf.badge) for (let i = 0; i < 16; i++) frames.push(base({ monGone: true, caption: [`🏅 BADGE EARNED: ${m.name} Slayer 🏅`, '#ffd54f'] }));
   for (let i = 0; i < 14; i++) frames.push(base(end));
   return frames;
 }
@@ -1576,12 +1611,12 @@ function draw(p, f, frame) {
     : f.chest
     ? renderSprite(composeChest(f.chest.id, f.chest.open), { scale, dy: f.chest.open ? 0 : frame % 2 ? -1 : 0, tint: f.chestFlash ? '#ffffff' : null, amount: f.chestFlash || 0 })
     : fightMon
-    ? renderSprite(composeMonster(fightMon), { scale, dy: frame % 4 < 2 ? 0 : -1, gray: f.monGray, dissolve: f.dissolve, slash: f.slash, tint: f.monTint ? f.monTintColor || '#ff1744' : null, amount: f.monTint || 0 })
+    ? renderSprite(composeMonster(fightMon), { scale, dy: frame % 4 < 2 ? 0 : -1, gray: f.monGray, dissolve: f.dissolve, slash: f.slash, tint: f.monTint ? f.monTintColor || '#ff1744' : fightMon.secret && frame % 9 === 0 ? '#ffd54f' : null, amount: f.monTint || (fightMon.secret ? 0.35 : 0) })
     : petLines.map(() => '');
 
   const out = [];
   out.push('');
-  const tags = [p.shiny && color('#ffd54f', '✦ shiny'), p.nature && color('#9e9e9e', p.nature), p.branch && p.stage >= 2 && color(BRANCHES[p.branch].mark, `${BRANCHES[p.branch].cls} class`)].filter(Boolean).join(color('#5a5a5a', ' · '));
+  const tags = [...(p.badges || []).map((b) => color('#ffd54f', `🏅 ${b.name}`)), p.shiny && color('#ffd54f', '✦ shiny'), p.nature && color('#9e9e9e', p.nature), p.branch && p.stage >= 2 && color(BRANCHES[p.branch].mark, `${BRANCHES[p.branch].cls} class`)].filter(Boolean).join(color('#5a5a5a', ' · '));
   out.push(center(`${color('#ffd700', '✦ CLAUDE PET ✦')}  ${color('#ffffff', `\x1b[1m${p.name}`)} ${color('#9e9e9e', 'the')} ${color('#ffffff', formName(form))}  ${color('#ffd700', `Lv ${p.level}`)}${tags ? `  ${tags}` : ''}`, cols));
   out.push('');
   const shake = f.shake === true ? 1 : f.shake === 'back' ? -1 : 0;
@@ -1709,6 +1744,7 @@ function seedInfo() {
   console.log(`  ${dim('nature ')} ${p.nature}`);
   console.log(`  ${dim('shiny  ')} ${p.shiny ? 'yes ✦' : 'no (1 in 128)'}`);
   console.log(`  ${dim('class  ')} ${p.branch ? BRANCHES[p.branch].cls : 'decided at Lv 15'}`);
+  console.log(`  ${dim('badges ')} ${(p.badges || []).map((b) => `🏅 ${b.name}`).join(' · ') || 'none yet (some are secret)'}`);
   console.log(`  ${dim('monarch')} ${p.monarch ? `yes · ${p.shadows}/3 shadow soldiers` : 'not yet (1% at Lv 30, again at Lv 40)'}`);
 }
 

@@ -39,11 +39,12 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
   | ⚡ Lightning | Voltcub → Stormfang → Fenrir Thunderlord | Static Pounce: always strikes first, extra hits |
   | 🌑 Void | Glitchling → Nullwraith → Void Sovereign | Null Gaze: 20% chance to erase an enemy attack |
 - **Class:** at Lv 15, whatever you do **more than you usually do** sets the pet's class, which tints its markings and gives a stat bonus. Bash → Shell, edits → Scribe, reads → Seeker, failures → Chaos, subagents → Hive.
-- **The Demon King:** at the Lv 30 evolution (and again at Lv 40), a pet has a 1% chance to rise as the Monarch of Shadows instead. It wields the Abyssal Edge, a demon-tier blade that burns with shadow flame on every hit. Monsters it slays can rise again as shadow soldiers, up to 3, which strike at the start of every fight.
+- **The Demon King:** at the Lv 30 evolution (and again at Lv 40), a pet has a 1% chance to rise as the Monarch of Shadows instead. It wields the Abyssal Scythe, a demon-tier black scythe with a crimson edge that burns with shadow flame on every hit. Monsters it slays can rise again as shadow soldiers, up to 3, which strike at the start of every fight.
 - **Loot:** 5 gear slots and 5 rarities. The top rarity, Mythic, can only be crafted.
   - Weapon types: sword, axe, dagger, staff.
   - Elements: 🔥 fire, ☠ poison, ❄ frost, ⚡ lightning.
   - Affixes such as lifesteal, thorns, regeneration, warding and shadows.
+- **A secret boss:** any fight has a 1-in-1000 chance of being something else entirely. It's tougher than any boss and can't be fled. Beat it once and you keep a 🏅 badge forever, next to your pet's name. To make it your own, drop a `secret-boss.json` (`{ "name", "pal", "rows" }`, 16 rows of 16 chars) into `~/.claude/claude-pet/` and it replaces the default art and name.
 - **Combat:** armor reduces damage, and evasion rating gives a chance to dodge, with diminishing returns. Monsters have elemental weaknesses and resistances, and some poison, chill or burn your pet. The pet drinks potions when it's low, retreats from fights it's losing, and picks safer fights after a losing streak.
 - **Town:** every 10 fights the pet fully heals, opens loot crates, crafts, sells leftovers and shops. It decides what to buy from its situation (low on potions, a boss due soon, an empty gear slot, which monsters keep showing up) and logs why.
 - **Crafting:** the pet does this on its own.

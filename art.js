@@ -202,24 +202,24 @@ const FORMS = {
   },
   demonking: {
     name: 'The Demon King',
-    pal: { o: '#05030a', k: '#2a2145', b: '#1a1530', h: '#3d3466', c: '#0d0a1a', C: '#3a1670', e: '#c8f4ff', p: '#a66bff', s: '#0a0508', q: '#ff3a1a', x: '#8b0a0a', Z: '#2a1a1a', R: '#4a0a10', E: '#ff2a2a' },
+    pal: { o: '#05030a', k: '#2a2145', b: '#1a1530', h: '#3d3466', c: '#0d0a1a', C: '#3a1670', e: '#c8f4ff', p: '#a66bff', s: '#2a060c', q: '#ff6a1a', x: '#c1121f', Z: '#5a2a30', R: '#4a0a10', E: '#ff2a2a' },
     rows: [
-      '...p........p...',
-      '...ko.oooo.ok...',
-      '....kobbbbok....',
-      '.....obhbbo.....',
-      '.....oebbeo.....',
-      '.....obbbbo.....',
-      '..ooCobboCoo....',
-      '.oCCobhbboCCoR.R',
-      'oCcobbbbbbocCZEZ',
-      'oCcobbbbbbocCxsx',
-      'oCcoobbbboocCsqx',
-      '.oCcobbbbocCoxss',
-      '.oCcob..bocCosqx',
-      '..oCob..boCo.xsx',
-      '..oCoh..hoCo..x.',
-      '...oo....oo...x.',
+      '...p..ossssqsxZo',
+      '...koxoooo.xxxZo',
+      '....kobbbbok..Zo',
+      '.....obhbbo...Zo',
+      '.....oebbeo...Zo',
+      '.....obbbbo...Zo',
+      '..ooCobboCoo..Zo',
+      '.oCCobhbboCCo.Zo',
+      'oCcobbbbbbocCbZo',
+      'oCcobbbbbbocC.Zo',
+      'oCcoobbbboocCbZo',
+      '.oCcobbbbocCo.Zo',
+      '.oCcob..bocCo.Zo',
+      '..oCob..boCo..Zo',
+      '..oCoh..hoCo.oEo',
+      '...oo....oo.....',
     ],
   },
 };
@@ -378,4 +378,28 @@ const GEAR_ANCHORS = {
   sovereign: { head: null, hand: { x: 14, y: 8 }, chest: { x0: 4, x1: 11, y0: 8, y1: 11, body: true }, neck: { x: 7, y: 7 }, feet: false },
 };
 
-module.exports = { FORMS, MONSTER_ART, MONSTER_PALS, GEAR_ANCHORS };
+// Ships as a hooded silhouette; a local secret-boss.json in the pet's home dir can replace its name and art.
+const SECRET_BOSS = {
+  name: 'The Secret Boss',
+  pal: { o: '#0a0a0a', b: '#1a1a22', y: '#ffd54f' },
+  rows: [
+    '................',
+    '.....oooooo.....',
+    '....obbbbbbo....',
+    '...obbbbbbbbo...',
+    '...obbyyybbbo...',
+    '...obbbbbybbo...',
+    '...obbbbybbbo...',
+    '...obbbybbbbo...',
+    '...obbbbbbbbo...',
+    '...obbbybbbbo...',
+    '..obbbbbbbbbbo..',
+    '.obbbbbbbbbbbbo.',
+    '.obbbbbbbbbbbbo.',
+    'obbbbbbbbbbbbbbo',
+    'oooooooooooooooo',
+    '................',
+  ],
+};
+
+module.exports = { FORMS, MONSTER_ART, MONSTER_PALS, GEAR_ANCHORS, SECRET_BOSS };
