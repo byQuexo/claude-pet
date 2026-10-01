@@ -1499,10 +1499,12 @@ function petSprite(p) {
     .filter((l) => /[▀▄]/.test(l));
 }
 
-// The statusline gets no terminal size, so COLUMNS (or `pet width`) decides where "far right" is.
+// COLUMNS is the full terminal width, but Claude Code pads the statusline and cuts longer lines with "…",
+// so the pet keeps a margin from the edge; `pet width` overrides the width if a setup differs.
+const STATUS_MARGIN = 6;
 function besideRight(left, sprite, cfg) {
   const width = cfg.width || parseInt(process.env.COLUMNS, 10) || 80;
-  const col = width - 16 - 2;
+  const col = width - 16 - STATUS_MARGIN;
   const start = left.slice(0, sprite.length).some((l) => cellWidth(l) >= col) ? left.length : 0;
   const out = [];
   for (let i = 0; i < Math.max(left.length, start + sprite.length); i++) {
