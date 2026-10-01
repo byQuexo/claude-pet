@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
 const crypto = require('crypto');
+const { FORMS, MONSTER_ART, MONSTER_PALS } = require('./art.js');
 
 const HOME = process.env.CLAUDE_PET_HOME || path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'claude-pet');
 const STATE = path.join(HOME, 'state.json');
@@ -15,6 +16,21 @@ const SETTINGS = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir
 const rand = (a, b) => a + Math.random() * (b - a);
 const randInt = (a, b) => Math.floor(rand(a, b + 1));
 const pick = (xs) => xs[Math.floor(Math.random() * xs.length)];
+const toHex = (rgb) => `#${rgb.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`;
+function hueShift(h, deg) {
+  let [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  let hue = 0, sat = 0;
+  if (d) {
+    sat = d / (1 - Math.abs(2 * l - 1));
+    hue = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  }
+  hue = (((hue * 60 + deg) % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs(((hue / 60) % 2) - 1)), m = l - c / 2;
+  const [r1, g1, b1] = hue < 60 ? [c, x, 0] : hue < 120 ? [x, c, 0] : hue < 180 ? [0, c, x] : hue < 240 ? [0, x, c] : hue < 300 ? [x, 0, c] : [c, 0, x];
+  return toHex([(r1 + m) * 255, (g1 + m) * 255, (b1 + m) * 255]);
+}
+const shiftPal = (pal, deg) => Object.fromEntries(Object.entries(pal).map(([k, v]) => [k, k === 'o' || k === 'e' || k === 'w' ? v : hueShift(v, deg)]));
 const r1 = (n) => Math.round(n * 10) / 10;
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -37,42 +53,6 @@ const ART = {
     '....obbbbbbo....',
     '.....oooooo.....',
     '................',
-  ],
-  hatchling: [
-    '................',
-    '................',
-    '................',
-    '................',
-    '.....oooooo.....',
-    '...oobbbbbboo...',
-    '..obhbbbbbbbbo..',
-    '..obbwebbbwebo..',
-    '.obbbeebbbeebbo.',
-    '.obbbbbbbbbbbbo.',
-    '.obbbbbmmbbbbbo.',
-    '.obbbbbbbbbbbbo.',
-    '..obbbbbbbbbbo..',
-    '..obboooooobbo..',
-    '...oo......oo...',
-    '................',
-  ],
-  beast: [
-    '................',
-    '................',
-    '................',
-    '....oooooooo....',
-    '...obbbbbbbbo...',
-    '..obhbbbbbbbbo..',
-    '..obwebbbbwebo..',
-    '..obeebbbbeebo..',
-    '..obbbbmmbbbbo..',
-    '...obbbbbbbbo...',
-    '..oobbbbbbbboo..',
-    '..obbccccccbbo..',
-    '.oobbccccccbboo.',
-    '..obbbccccbbbo..',
-    '..obbo....obbo..',
-    '..oooo....oooo..',
   ],
   slime: [
     '................',
@@ -205,37 +185,6 @@ const ART = {
 const mirror = (pts) => pts.concat(pts.map(([r, c]) => [r, 15 - c]));
 const layer = (ch, pts, under = false) => ({ ch, pts, under });
 
-const ACCESSORY = {
-  shell: [
-    layer('k', mirror([[0, 3], [1, 4], [2, 4], [2, 5]])),
-    layer('t', [[11, 6], [12, 7], [13, 6], [13, 8], [13, 9]]),
-  ],
-  edit: [
-    layer('q', [[1, 15], [2, 14], [2, 15], [3, 14], [3, 15], [4, 14]]),
-    layer('k', [[5, 14], [6, 14], [7, 14], [8, 14], [9, 14], [10, 14], [11, 14]]),
-  ],
-  read: [
-    layer('k', mirror([[5, 3], [5, 4], [5, 5], [5, 6], [8, 3], [8, 4], [8, 5], [8, 6], [6, 3], [7, 3], [6, 6], [7, 6], [6, 7]])),
-    layer('o', mirror([[1, 4], [2, 4], [2, 5]])),
-  ],
-  fail: [
-    layer('r', mirror([[0, 3], [1, 3], [1, 4], [2, 4], [2, 5]])),
-    layer('r', [[13, 14], [12, 15], [11, 15], [10, 14], [10, 15], [9, 15]]),
-    layer('o', mirror([[5, 4], [5, 5]])),
-  ],
-  agent: [
-    layer('k', mirror([[1, 5], [2, 6]])),
-    layer('y', mirror([[0, 4]])),
-    layer('y', [[6, 0], [10, 15]], true),
-  ],
-};
-
-const CROWN = layer('g', [
-  [0, 4], [0, 7], [0, 8], [0, 11],
-  [1, 4], [1, 5], [1, 7], [1, 8], [1, 10], [1, 11],
-  [2, 4], [2, 5], [2, 6], [2, 7], [2, 8], [2, 9], [2, 10], [2, 11],
-]);
-const WINGS = layer('x', mirror([[4, 0], [5, 0], [5, 1], [6, 0], [6, 1], [6, 2], [7, 0], [7, 1], [7, 2], [8, 1], [8, 2], [9, 1]]), true);
 const col = (c, from, to) => Array.from({ length: to - from + 1 }, (_, i) => [from + i, c]);
 const WEAPON_ART = {
   sword: [layer('W', col(0, 3, 9)), layer('H', [[10, 0], [10, 1]]), layer('G', [[11, 0], [12, 0]])],
@@ -243,17 +192,6 @@ const WEAPON_ART = {
   dagger: [layer('W', [[8, 0], [9, 0], [10, 0]]), layer('H', [[11, 0], [11, 1]]), layer('G', [[12, 0]])],
   staff: [layer('G', col(0, 4, 13)), layer('W', [[2, 0], [2, 1], [3, 0], [3, 1]])],
 };
-const HELMET = [
-  null,
-  layer('M', [[3, 6], [3, 7], [3, 8], [3, 9], [4, 5], [4, 6], [4, 7], [4, 8], [4, 9], [4, 10]]),
-  layer('M', [[2, 5], [2, 6], [2, 7], [2, 8], [2, 9], [2, 10], [3, 4], [3, 5], [3, 6], [3, 7], [3, 8], [3, 9], [3, 10], [3, 11]]),
-];
-const BOOTS = [
-  null,
-  layer('B', mirror([[13, 3], [13, 4], [14, 3], [14, 4]])),
-  layer('B', mirror([[14, 2], [14, 3], [14, 4], [14, 5], [15, 2], [15, 3], [15, 4], [15, 5]])),
-];
-const SCARF = layer('A', [[12, 3], [12, 4], [12, 5], [12, 6], [12, 7], [12, 8], [12, 9], [12, 10], [12, 11], [12, 12]]);
 const SPARKLE = layer('S', [[0, 1], [1, 0], [1, 2], [2, 1]], true);
 
 const BASE_PAL = {
@@ -263,32 +201,24 @@ const BASE_PAL = {
 };
 
 const BRANCHES = {
-  shell: {
-    bucket: 'bash', forms: ['Shell Drake', 'Elder Shell Wyrm'], emoji: '🐉',
-    pal: { b: '#3a7d44', h: '#6fbf73', c: '#c7f2a4', k: '#e0e0e0', x: '#2e5939' },
-    bonus: (s) => { s.atk *= 1.25; },
-  },
-  edit: {
-    bucket: 'edit', forms: ['Quill Golem', 'Titan Scribe'], emoji: '🗿',
-    pal: { b: '#8d99ae', h: '#c0c7d4', c: '#edf2f4', k: '#6b4226', x: '#b8c4d6' },
-    bonus: (s) => { s.def *= 1.4; s.maxHp *= 1.15; },
-  },
-  read: {
-    bucket: 'read', forms: ['Grep Owl', 'Archive Seraph'], emoji: '🦉',
-    pal: { b: '#7b5ea7', h: '#b39ddb', c: '#e8dcff', k: '#222233', x: '#5e4a8a' },
-    bonus: (s) => { s.crit += 0.15; },
-  },
-  fail: {
-    bucket: 'fail', forms: ['Chaos Imp', 'Chaos Archfiend'], emoji: '😈',
-    pal: { b: '#c0392b', h: '#ff7961', c: '#ffb199', e: '#ffeb3b', x: '#6b0f1a' },
-    bonus: (s) => { s.atk *= 1.35; s.crit += 0.08; s.def *= 0.8; },
-  },
-  agent: {
-    bucket: 'agent', forms: ['Hive Wisp', 'Swarm Sovereign'], emoji: '🐝',
-    pal: { b: '#2ec4b6', h: '#9ff3e9', c: '#e0fbfc', k: '#1b4965', x: '#cbf3f0' },
-    bonus: (s) => { s.multi += 0.25; s.spd *= 1.3; },
-  },
+  shell: { bucket: 'bash', cls: 'Shell', mark: '#4ade80', bonus: (s) => { s.atk *= 1.25; } },
+  edit: { bucket: 'edit', cls: 'Scribe', mark: '#e2c275', bonus: (s) => { s.def *= 1.4; s.maxHp *= 1.15; } },
+  read: { bucket: 'read', cls: 'Seeker', mark: '#b39ddb', bonus: (s) => { s.crit += 0.15; } },
+  fail: { bucket: 'fail', cls: 'Chaos', mark: '#ff5252', bonus: (s) => { s.atk *= 1.35; s.crit += 0.08; s.def *= 0.8; } },
+  agent: { bucket: 'agent', cls: 'Hive', mark: '#2ec4b6', bonus: (s) => { s.multi += 0.25; s.spd *= 1.3; } },
 };
+const SPECIES = {
+  fire: { label: 'Fire', emoji: '🐉', forms: ['pyrobit', 'blazewyrm', 'infernus'], fx: 'fire', innate: 'fire', signature: 'Ember Breath' },
+  volt: { label: 'Lightning', emoji: '🐺', forms: ['voltcub', 'stormfang', 'fenrir'], fx: 'spark', innate: 'lightning', signature: 'Static Pounce' },
+  void: { label: 'Void', emoji: '👁', forms: ['glitchling', 'nullwraith', 'sovereign'], fx: 'void', innate: null, signature: 'Null Gaze' },
+};
+const NATURES = {
+  Bold: (s) => { s.atk *= 1.05; }, Restless: (s) => { s.spd *= 1.08; }, Calm: (s) => { s.def *= 1.06; },
+  Reckless: (s) => { s.atk *= 1.08; s.def *= 0.95; }, Patient: (s) => { s.regen += 0.01; }, Curious: (s) => { s.crit += 0.02; },
+  Stubborn: (s) => { s.maxHp *= 1.06; }, Sly: (s) => { s.evasion = s.evasion * 1.15 + 3; },
+};
+const NULL_GAZE = 0.2;
+const MONARCH_CHANCE = 0.01;
 const BRANCH_OF_BUCKET = Object.fromEntries(Object.entries(BRANCHES).map(([k, v]) => [v.bucket, k]));
 
 const MONSTERS = {
@@ -327,13 +257,47 @@ const MONSTERS = {
       { o: '#2b0a0a', b: '#7a1f1f', h: '#c0392b', e: '#ffd60a', m: '#1a0505' },
     ],
   },
+  ouroboros: {
+    names: ['Infinite Loop Ouroboros', 'Recursion Serpent', 'While(true) Wyrm'], hp: 1.3, atk: 0.85, def: 0.9, spd: 0.9,
+    weak: 'frost', resist: 'fire', attack: 'poison', proc: 0.2, evade: 0.04,
+  },
+  cronbat: {
+    names: ['Cron Bat', 'Midnight Job Bat', 'Scheduled Screecher'], hp: 0.8, atk: 1.05, def: 0.6, spd: 1.4,
+    weak: 'lightning', resist: 'poison', attack: null, proc: 0, evade: 0.12,
+  },
+  skeleton: {
+    names: ['Segfault Skeleton', 'Core Dump Revenant', 'Dangling Pointer Bones'], hp: 0.9, atk: 1.15, def: 1.0, spd: 1.0,
+    weak: 'fire', resist: 'frost', attack: 'frost', proc: 0.1, evade: 0.03,
+  },
+  turtle: {
+    names: ['Timeout Turtle', '504 Tortoise', 'Blocking I/O Turtle'], hp: 1.4, atk: 0.8, def: 1.8, spd: 0.5,
+    weak: 'lightning', resist: 'poison', attack: null, proc: 0, evade: 0,
+  },
+  mimic: {
+    names: ['Phishing Mimic', 'Fake Login Chest', 'Too-Good-To-Be-True Crate'], hp: 1.1, atk: 1.25, def: 1.0, spd: 1.1,
+    weak: 'fire', resist: 'frost', attack: 'poison', proc: 0.2, evade: 0.05, eliteOnly: true,
+  },
+  hydra: {
+    names: ['Dependency Hydra', 'node_modules Hydra', 'Transitive Dependency Beast'], hp: 1.5, atk: 1.1, def: 1.1, spd: 0.9,
+    weak: 'poison', resist: 'fire', attack: 'poison', proc: 0.2, evade: 0.02, eliteOnly: true,
+  },
+  kraken: {
+    names: ['Kubernetes Kraken', 'Helm Chart Horror', 'CrashLoopBackOff Leviathan'], hp: 1.1, atk: 1.0, def: 1.1, spd: 0.8,
+    weak: 'lightning', resist: 'frost', attack: 'frost', proc: 0.3, evade: 0.02, bossOnly: true,
+  },
 };
+for (const [kind, art] of Object.entries(MONSTER_ART)) {
+  ART[kind] = art;
+  MONSTERS[kind].pals = [MONSTER_PALS[kind], shiftPal(MONSTER_PALS[kind], 50), shiftPal(MONSTER_PALS[kind], -70)];
+}
+const BOSS_KINDS = ['boss', 'kraken'];
+const ELITE_KINDS = ['mimic', 'hydra'];
 const KINDS_BY_BUCKET = {
-  bash: ['slime', 'slime', 'ghost', 'bug'],
-  edit: ['bug', 'bug', 'slime', 'ghost'],
-  read: ['ghost', 'ghost', 'slime', 'bug'],
-  fail: ['bug', 'ghost', 'bug', 'ghost'],
-  agent: ['slime', 'ghost', 'bug'],
+  bash: ['slime', 'slime', 'ouroboros', 'turtle', 'ghost', 'bug'],
+  edit: ['bug', 'bug', 'skeleton', 'slime', 'ghost'],
+  read: ['ghost', 'ghost', 'cronbat', 'slime', 'bug'],
+  fail: ['bug', 'skeleton', 'ghost', 'turtle'],
+  agent: ['slime', 'ghost', 'bug', 'cronbat', 'ouroboros', 'skeleton'],
 };
 
 const RARITY = [
@@ -342,6 +306,7 @@ const RARITY = [
   { name: 'epic', color: '#b06bff', mult: 2.4, prefix: ['Arcane', 'Async', 'Immutable', 'Memoized'] },
   { name: 'legendary', color: '#ffb300', mult: 3.5, prefix: ['Mythic', 'Zero-Day', 'Quantum', 'Senior'] },
   { name: 'mythic', color: '#ff1744', mult: 5, prefix: ['Ascended', 'Eternal', 'Primordial', 'Root-Access'] },
+  { name: 'demon', color: '#a66bff', mult: 6, prefix: ['Abyssal'] },
 ];
 const MAX_PLUS = 5;
 const ELEMENTS = {
@@ -349,7 +314,9 @@ const ELEMENTS = {
   poison: { icon: '☠', color: '#76ff03', adj: ['Venomous', 'Toxic', 'Septic'] },
   frost: { icon: '❄', color: '#80d8ff', adj: ['Frozen', 'Glacial', 'Rimed'] },
   lightning: { icon: '⚡', color: '#ffea00', adj: ['Thunder', 'Static', 'Voltaic'] },
+  shadow: { icon: '🌑', color: '#a66bff', adj: ['Abyssal'] },
 };
+const ROLL_ELEMENTS = ['fire', 'poison', 'frost', 'lightning'];
 const ELEMENT_CHANCE = [0.1, 0.35, 0.6, 1, 1];
 const SLOTS = ['weapon', 'armor', 'helmet', 'boots', 'charm'];
 const WEAPON_TYPES = {
@@ -408,7 +375,7 @@ const BOXES = {
   gold: { name: 'Golden Crate', color: '#ffca28', items: 3, weights: [0, 40, 45, 15], gold: [50, 150], extras: 1 },
   mythic: { name: 'Mythic Chest', color: '#e040fb', items: 3, weights: [0, 0, 60, 40], gold: [100, 300], extras: 2 },
 };
-const KIND_LABEL = { slime: 'slimes', ghost: 'ghosts', bug: 'bugs', boss: 'bosses' };
+const KIND_LABEL = { slime: 'slimes', ghost: 'ghosts', bug: 'bugs', boss: 'bosses', ouroboros: 'loop serpents', cronbat: 'cron bats', skeleton: 'skeletons', turtle: 'turtles', mimic: 'mimics', hydra: 'hydras', kraken: 'krakens' };
 const NAMES = ['Nibble', 'Bytey', 'Pixel', 'Segfault', 'Tofu', 'Kernel', 'Mochi', 'Glitch', 'Sprocket', 'Biscuit'];
 
 const STAGE_LEVELS = [1, 5, 15, 30];
@@ -422,10 +389,13 @@ const BOSS_EVERY = 25;
 
 const zeroMix = () => ({ bash: 0, edit: 0, read: 0, fail: 0, agent: 0 });
 
+const newEgg = () => ({ mix: zeroMix(), hours: Array(24).fill(0), ext: {}, repos: {}, commits: 0, testsPassed: 0, testsFailed: 0, first: Date.now() });
+
 function newPet() {
   return {
     v: 1, name: pick(NAMES), born: Date.now(),
     level: 1, xp: 0, stage: 0, branch: null, secondary: null,
+    species: null, nature: null, shiny: false, seed: null, monarch: false, shadows: 0, egg: newEgg(),
     hp: 40, faint: 0, buffs: [], potions: 1, bonus: {}, nextBoss: BOSS_EVERY, gold: 0, recent: [], lastShop: null, boxes: [], lastBoxes: null,
     gear: Object.fromEntries(SLOTS.map((k) => [k, null])),
     inventory: [], mix: zeroMix(), totalMix: zeroMix(),
@@ -450,7 +420,39 @@ function upgrade(p) {
   p.recent = p.recent || [];
   p.boxes = p.boxes || [];
   p.bonus = p.bonus || {};
+  p.shadows = p.shadows || 0;
+  if (p.stage >= 1 && !p.species) rollSeed(p, { totalMix: p.totalMix, born: p.born, name: p.name });
   return p;
+}
+
+// Hashes everything the egg observed into one seed; the seed alone decides species, nature and shiny.
+function rollSeed(p, facts) {
+  const seed = crypto.createHash('sha256').update(JSON.stringify(facts)).digest('hex');
+  const n = (i) => parseInt(seed.slice(i, i + 8), 16);
+  p.seed = seed;
+  p.species = Object.keys(SPECIES)[n(0) % 3];
+  p.nature = Object.keys(NATURES)[n(24) % 8];
+  p.shiny = n(16) % 128 === 0;
+}
+
+function hatch(p) {
+  const e = p.egg || newEgg();
+  rollSeed(p, { mix: e.mix, hours: e.hours, ext: e.ext, repos: Object.keys(e.repos).sort(), commits: e.commits, testsPassed: e.testsPassed, testsFailed: e.testsFailed, first: e.first, born: p.born, name: p.name });
+  log(p, 'evolve', `the egg cracks open: seed ${p.seed.slice(0, 8)} → a ${p.shiny ? 'shiny ' : ''}${p.nature} ${FORMS[SPECIES[p.species].forms[0]].name}!`);
+}
+
+function makeAbyssalEdge(level) {
+  return { name: 'Abyssal Edge', slot: 'weapon', type: 'sword', element: 'shadow', rarity: 5, level, stats: { atk: r1((1.5 + 0.7 * level) * 6), lifesteal: 0.15 }, affixes: [], locked: true };
+}
+
+function ascend(p) {
+  p.monarch = true;
+  const old = p.gear.weapon;
+  if (old) p.inventory.unshift(old);
+  p.gear.weapon = makeAbyssalEdge(p.level);
+  p.hp = Math.min(p.hp, petStats(p).maxHp);
+  p.evolution = { at: Date.now(), from: { ...formOf(p), monarch: false }, to: formOf(p) };
+  log(p, 'evolve', `the shadows answer: ${p.name} rises as the Demon King, Monarch of Shadows, and takes up the Abyssal Edge`);
 }
 
 function save(p) {
@@ -482,27 +484,35 @@ function withLock(fn) {
 
 const xpToNext = (level) => Math.round(25 * Math.pow(level, 1.95));
 
-function formName(p) {
-  if (p.stage === 0) return 'Egg';
-  if (p.stage === 1) return 'Hatchling';
-  return BRANCHES[p.branch].forms[p.stage - 2];
+const formOf = (p) => ({ stage: p.stage, species: p.species, branch: p.branch, secondary: p.secondary, monarch: !!p.monarch, shiny: !!p.shiny });
+const formKey = (f) => (!f.stage || !f.species ? 'egg' : f.monarch && f.stage >= 3 ? 'demonking' : SPECIES[f.species].forms[f.stage - 1]);
+const fxOf = (f) => (f.monarch && f.stage >= 3 ? 'monarch' : f.stage && f.species ? SPECIES[f.species].fx : null);
+
+function formName(f) {
+  const key = formKey(f);
+  return key === 'egg' ? 'Egg' : FORMS[key].name;
 }
 
 function emoji(p) {
-  if (p.stage === 0) return '🥚';
-  if (p.stage === 1) return '🐣';
-  return (p.stage === 3 ? '👑' : '') + BRANCHES[p.branch].emoji;
+  if (!p.stage || !p.species) return '🥚';
+  return p.monarch && p.stage >= 3 ? '🌑' : (p.stage === 3 ? '👑' : '') + SPECIES[p.species].emoji;
 }
 
 function petStats(p) {
   const L = p.level - 1;
   const s = { maxHp: 40 + 10 * L, atk: 6 + 2.2 * L, def: 2 + 1.1 * L, spd: 5 + 0.5 * L, crit: 0.05, multi: 0, lifesteal: 0, thorns: 0, regen: 0, resist: 0, evasion: 3 + 0.5 * L };
-  if (p.stage >= 2) BRANCHES[p.branch].bonus(s);
+  if (p.stage >= 2 && p.branch) BRANCHES[p.branch].bonus(s);
   if (p.stage >= 3) { s.maxHp *= 1.2; s.atk *= 1.2; s.def *= 1.2; }
+  if (p.stage >= 1 && p.species === 'volt') s.multi += 0.2;
+  if (p.nature && NATURES[p.nature]) NATURES[p.nature](s);
   for (const [k, v] of Object.entries(p.bonus || {})) s[k] += v;
   for (const it of Object.values(p.gear)) if (it) for (const [k, v] of Object.entries(it.stats)) s[k] += v;
   for (const b of p.buffs || []) BUFFS[b.id].apply(s);
+  if (p.gear.weapon && p.gear.weapon.element === 'shadow') s.atk *= 1.6;
   s.maxHp = Math.round(s.maxHp);
+  s.crit = Math.min(0.75, s.crit);
+  s.lifesteal = Math.min(0.3, s.lifesteal);
+  s.thorns = Math.min(0.5, s.thorns);
   return s;
 }
 
@@ -541,14 +551,16 @@ function leaning(p) {
 function checkEvolve(p) {
   const target = STAGE_LEVELS.filter((l) => p.level >= l).length - 1;
   while (p.stage < target) {
-    const from = { stage: p.stage, branch: p.branch, secondary: p.secondary };
+    const from = formOf(p);
     const before = formName(p);
     p.stage++;
+    if (p.stage === 1) { hatch(p); delete p.egg; }
     if (p.stage === 2) p.branch = dominant(p);
     if (p.stage === 3) p.secondary = dominant(p, BRANCHES[p.branch].bucket);
     p.mix = zeroMix();
-    p.evolution = { at: Date.now(), from, to: { stage: p.stage, branch: p.branch, secondary: p.secondary } };
-    log(p, 'evolve', `${p.name} evolved: ${before} → ${formName(p)}!`);
+    p.evolution = { at: Date.now(), from, to: formOf(p) };
+    if (p.stage > 1) log(p, 'evolve', `${p.name} evolved: ${before} → ${formName(p)}, ${BRANCHES[p.branch].cls} class!`);
+    if (p.stage === 3 && !p.monarch && Math.random() < MONARCH_CHANCE) ascend(p);
   }
 }
 
@@ -560,19 +572,22 @@ function gainXp(p, n) {
     p.hp = petStats(p).maxHp;
     log(p, 'level', `${p.name} reached Lv ${p.level}!`);
     checkEvolve(p);
+    if (p.level === 40 && !p.monarch && Math.random() < MONARCH_CHANCE) ascend(p);
   }
 }
 
 function spawn(p, bucket, boss) {
-  const kind = boss ? 'boss' : pick(KINDS_BY_BUCKET[bucket] || ['slime', 'ghost', 'bug']);
+  let elite = !boss && Math.random() < 0.1;
+  const kind = boss ? pick(BOSS_KINDS) : elite && Math.random() < 0.5 ? pick(ELITE_KINDS) : pick(KINDS_BY_BUCKET[bucket] || ['slime', 'ghost', 'bug']);
   const k = MONSTERS[kind];
-  const elite = !boss && Math.random() < 0.1;
+  if (k.eliteOnly) elite = true;
   const streak = (p.recent || []).slice(-5).filter((r) => r.result === 'loss').length >= 2;
   const level = Math.max(1, p.level + (boss ? 1 : streak ? randInt(-3, -1) : randInt(-2, 1)));
   const s = petStats(p), L = p.level - 1;
   // Monster HP tracks the pet's offence and monster attack its toughness, so gear in one never punishes a gap in the other.
   const offence = Math.pow(s.atk / (6 + 2.2 * L), 0.85);
-  const toughness = Math.pow(((s.maxHp / (40 + 10 * L)) * ((s.def + 5) / (7 + 1.1 * L))) / (1 - evadeChance(s.evasion, level)), 0.55);
+  const gaze = p.stage >= 1 && p.species === 'void' ? NULL_GAZE : 0;
+  const toughness = Math.pow(((s.maxHp / (40 + 10 * L)) * ((s.def + 5) / (7 + 1.1 * L))) / ((1 - evadeChance(s.evasion, level)) * (1 - gaze)), 0.55);
   return {
     name: (elite ? 'Elite ' : '') + pick(k.names), kind, level, pal: randInt(0, k.pals.length - 1), boss, elite,
     maxHp: Math.round((18 + 10 * level) * offence * k.hp * (boss ? 1.8 : 1) * (elite ? 1.4 : 1)),
@@ -591,13 +606,19 @@ function fight(p, m) {
     const c = Math.random() < crit;
     return [Math.max(1, Math.round((atk * rand(0.85, 1.15) - def * 0.5) * (c ? 2 : 1))), c];
   };
-  const el = p.gear.weapon && p.gear.weapon.element;
-  const elMult = !el ? 1 : k.weak === el ? 1.5 : k.resist === el || k.resist === 'all' ? 0.6 : 1;
+  const el = (p.gear.weapon && p.gear.weapon.element) || (p.stage >= 1 && p.species ? SPECIES[p.species].innate : null);
+  const elMult = !el || el === 'shadow' ? 1 : k.weak === el ? 1.5 : k.resist === el || k.resist === 'all' ? 0.6 : 1;
+  const gaze = p.stage >= 1 && p.species === 'void' ? NULL_GAZE : 0;
   const resist = Math.min(0.75, s.resist);
   const dodge = evadeChance(s.evasion, m.level);
   const fx = { burn: 0, burnDmg: 0, poison: 0, frozen: false, pBurn: 0, pBurnDmg: 0, pPoison: 0, chilled: false };
-  const order = s.spd >= m.spd ? ['p', 'm'] : ['m', 'p'];
+  const order = s.spd >= m.spd || (p.stage >= 1 && p.species === 'volt') ? ['p', 'm'] : ['m', 'p'];
   let retreated = false;
+  if (p.monarch) for (let i = 0; i < p.shadows && mhp > 0; i++) {
+    const d = Math.max(1, Math.round(s.atk * 0.4));
+    mhp = Math.max(0, mhp - d);
+    push({ a: 'shadow', d });
+  }
   for (let i = 0; i < 30 && php > 0 && mhp > 0 && !retreated; i++) {
     for (const who of order) {
       if (php <= 0 || mhp <= 0) break;
@@ -626,6 +647,7 @@ function fight(p, m) {
           php = Math.min(s.maxHp, php + Math.round(d * s.lifesteal));
           push({ a: 'p', d, c, el });
           if (!el || mhp <= 0) continue;
+          if (el === 'shadow') { fx.burn = 3; fx.burnDmg = Math.max(1, Math.round(d * 0.3)); fx.burnEl = 'shadow'; }
           if (el === 'fire' && Math.random() < 0.35) { fx.burn = 3; fx.burnDmg = Math.max(1, Math.round(d * 0.3)); }
           if (el === 'poison' && Math.random() < 0.5) fx.poison = Math.min(5, fx.poison + 1);
           if (el === 'frost' && Math.random() < 0.25) fx.frozen = true;
@@ -636,11 +658,12 @@ function fight(p, m) {
           }
         }
       } else {
-        if (fx.burn > 0) { fx.burn--; mhp = Math.max(0, mhp - fx.burnDmg); push({ a: 'dot', el: 'fire', d: fx.burnDmg }); }
+        if (fx.burn > 0) { fx.burn--; mhp = Math.max(0, mhp - fx.burnDmg); push({ a: 'dot', el: fx.burnEl || 'fire', d: fx.burnDmg }); }
         if (fx.poison > 0 && mhp > 0) { const d = Math.max(1, Math.round(s.atk * 0.08 * fx.poison)); mhp = Math.max(0, mhp - d); push({ a: 'dot', el: 'poison', d }); }
         if (mhp <= 0) break;
         if (fx.frozen) { fx.frozen = false; push({ a: 'frozen', el: 'frost' }); continue; }
         if (Math.random() < dodge) { push({ a: 'evade' }); continue; }
+        if (Math.random() < gaze) { push({ a: 'null', el: 'shadow' }); continue; }
         const [d, c] = hit(m.atk, s.def, 0.05);
         php = Math.max(0, php - d);
         mhp = Math.max(0, mhp - Math.round(d * s.thorns));
@@ -667,7 +690,7 @@ function makeItem(level, weights, forced = {}) {
   const slot = forced.slot || pick(SLOTS);
   const type = slot === 'weapon' ? forced.type || pick(Object.keys(WEAPON_TYPES)) : undefined;
   const stats = SLOT_STATS[slot](level, mult, WEAPON_TYPES[type]);
-  const element = type && Math.random() < ELEMENT_CHANCE[ri] ? pick(Object.keys(ELEMENTS)) : undefined;
+  const element = type && Math.random() < ELEMENT_CHANCE[ri] ? pick(ROLL_ELEMENTS) : undefined;
   let name = `${pick(element ? ELEMENTS[element].adj : rar.prefix)} ${pick(type ? WEAPON_TYPES[type].names : GEAR_BASES[slot])}`;
   const affixes = Math.random() < AFFIX_CHANCE[ri] ? [pick(AFFIXES)] : [];
   if (ri >= 3) affixes.push(pick(AFFIXES.filter((a) => a !== affixes[0])));
@@ -679,7 +702,7 @@ function makeItem(level, weights, forced = {}) {
 function equip(p, it) {
   p.stats.items++;
   const cur = p.gear[it.slot];
-  if (itemPower(it) > itemPower(cur)) {
+  if (!(cur && cur.locked) && itemPower(it) > itemPower(cur)) {
     p.gear[it.slot] = it;
     if (cur) p.inventory.unshift(cur);
     it.equipped = true;
@@ -861,7 +884,7 @@ function craft(p) {
   }
 
   const w = p.gear.weapon, foe = recentFoe(p);
-  if (w && foe) {
+  if (w && foe && !w.locked) {
     const k = MONSTERS[foe];
     const bad = !w.element || k.resist === w.element;
     const donor = p.inventory.find((it) => it.slot === 'weapon' && it.element && (it.element === k.weak || (!w.element && k.resist !== it.element)));
@@ -941,10 +964,12 @@ function visitTown(p) {
   if (!bought.length) log(p, 'shop', `browsed the shop, saving gold (${p.gold}g)`);
 }
 
-function tick(p, bucket, event) {
+function tick(p, bucket, event, ctx = {}) {
   p.stats.ticks++;
   if (bucket) { p.mix[bucket]++; p.totalMix[bucket]++; }
+  if (p.stage === 0) observe(p, bucket, ctx);
   const s = petStats(p);
+  p.hp = Math.min(p.hp, s.maxHp);
   if (event === 'wake') {
     p.hp = s.maxHp;
     p.faint = 0;
@@ -974,7 +999,7 @@ function tick(p, bucket, event) {
   p.hp = f.php;
   const lf = {
     id: `${Date.now()}-${p.stats.ticks}`, t: Date.now(), monster: m, petStartHp: startHp, petMaxHp: s.maxHp,
-    form: { stage: p.stage, branch: p.branch, secondary: p.secondary }, rounds: f.rounds, result: f.result, xp: 0, loot: null,
+    form: formOf(p), rounds: f.rounds, result: f.result, xp: 0, loot: null,
   };
   for (const b of p.buffs) b.fights--;
   p.buffs = p.buffs.filter((b) => b.fights > 0);
@@ -987,6 +1012,12 @@ function tick(p, bucket, event) {
     p.stats.goldEarned += lf.gold;
     gainXp(p, lf.xp);
     lf.loot = rollLoot(p, m);
+    if (m.kind === 'mimic') { p.boxes.push(Math.random() < 0.25 ? 'gold' : 'iron'); lf.loot.push({ name: `🎁 ${BOXES[p.boxes[p.boxes.length - 1]].name} (the mimic's real chest)` }); }
+    if (p.monarch && p.shadows < 3 && Math.random() < 0.1) {
+      p.shadows++;
+      lf.arise = true;
+      log(p, 'evolve', `ARISE: ${m.name} rises as ${p.name}'s shadow soldier (${p.shadows}/3)`);
+    }
     let text = `slew ${m.name} (Lv ${m.level}) +${lf.xp}xp +${lf.gold}g`;
     for (const l of lf.loot) text += ` · ${l.equipped ? 'equipped' : 'found'} ${l.name}`;
     log(p, m.boss ? 'boss' : 'fight', text);
@@ -1008,6 +1039,14 @@ function tick(p, bucket, event) {
   if (p.stats.fights % TOWN_EVERY === 0) visitTown(p);
 }
 
+function observe(p, bucket, ctx) {
+  const e = (p.egg ||= newEgg());
+  if (bucket) e.mix[bucket]++;
+  e.hours[new Date().getHours()]++;
+  if (ctx.cwd) { const h = crypto.createHash('sha1').update(ctx.cwd).digest('hex').slice(0, 10); e.repos[h] = (e.repos[h] || 0) + 1; }
+  if (ctx.file) { const x = path.extname(ctx.file).toLowerCase().slice(0, 12) || '(none)'; e.ext[x] = (e.ext[x] || 0) + 1; }
+}
+
 const TOOL_BUCKET = [
   [/^Bash$|^BashOutput$/, 'bash'],
   [/^(Edit|Write|MultiEdit|NotebookEdit)$/, 'edit'],
@@ -1026,7 +1065,9 @@ function hook() {
   else if (ev === 'SubagentStart') bucket = 'agent';
   else if (ev === 'PostToolUse') bucket = (TOOL_BUCKET.find(([re]) => re.test(tool)) || [])[1] || null;
   const cmd = tool === 'Bash' && input.tool_input && typeof input.tool_input.command === 'string' ? input.tool_input.command : '';
-  withLock((p) => { tick(p, bucket, event); if (cmd) codingEvent(p, cmd, ev === 'PostToolUseFailure'); });
+  const ti = input.tool_input || {};
+  const ctx = { cwd: typeof input.cwd === 'string' ? input.cwd : '', file: typeof ti.file_path === 'string' ? ti.file_path : typeof ti.notebook_path === 'string' ? ti.notebook_path : '' };
+  withLock((p) => { tick(p, bucket, event, ctx); if (cmd) codingEvent(p, cmd, ev === 'PostToolUseFailure'); });
 }
 
 const RUNS = (re) => new RegExp(`(^|[;&|(]\\s*)(\\S+=\\S+\\s+)*(${re.source})`);
@@ -1036,6 +1077,10 @@ const COMMIT_CMD = RUNS(/git commit\b/), PR_CMD = RUNS(/gh pr create\b/), PUSH_C
 // What you actually ship echoes into the pet's world, beyond the raw tool-call tick.
 function codingEvent(p, cmd, failed) {
   const L = p.level;
+  if (p.stage === 0 && p.egg) {
+    if (TEST_CMD.test(cmd)) p.egg[failed ? 'testsFailed' : 'testsPassed']++;
+    else if (!failed && COMMIT_CMD.test(cmd)) p.egg.commits++;
+  }
   if (TEST_CMD.test(cmd)) {
     if (failed) { p.ambush = true; log(p, 'code', 'a test failed — something is crawling out of the suite…'); }
     else { const xp = Math.round(xpToNext(L) * 0.03); gainXp(p, xp); log(p, 'code', `tests passed: ${p.name} trains on green CI (+${xp}xp)`); }
@@ -1070,23 +1115,26 @@ function paint(grid, l) {
   for (const [r, c] of l.pts) if (!l.under || grid[r][c] === '.') grid[r][c] = l.ch;
 }
 
+const mixHex = (a, b, t) => toHex(mixRgb(hex(a), hex(b), t));
+
 function composePet(form, p, opts = {}) {
-  const art = ['egg', 'hatchling', 'beast', 'beast'][form.stage];
-  const grid = ART[art].map((row) => row.split(''));
-  const pal = { ...BASE_PAL, ...(form.branch && form.stage >= 2 ? BRANCHES[form.branch].pal : {}) };
-  if (form.stage === 3) { paint(grid, WINGS); for (const l of ACCESSORY[form.secondary] || []) paint(grid, l); }
-  if (form.stage >= 2) for (const l of ACCESSORY[form.branch]) paint(grid, l);
-  if (form.stage === 3) paint(grid, CROWN);
+  const key = formKey(form);
+  const src = key === 'egg' ? { rows: ART.egg, pal: BASE_PAL } : FORMS[key];
+  const grid = src.rows.map((row) => row.split(''));
+  const pal = { ...src.pal, H: '#d4af37', G: '#8b5a2b' };
+  const t = opts.t || 0;
+  if (form.shiny) for (const k of ['b', 'h', 'c', 'C', 'g']) if (pal[k]) pal[k] = hueShift(pal[k], 150);
+  if (form.branch && form.stage >= 2 && pal.h) pal.h = mixHex(pal.h, BRANCHES[form.branch].mark, 0.55);
+  const fx = fxOf(form);
+  if (fx === 'fire' && t % 2) [pal.f, pal.r] = [pal.r, pal.f];
+  if (fx === 'monarch') { if (t % 2) pal.p = '#d9b8ff'; if (t % 3 === 0) pal.e = '#7fe3ff'; }
   if (form.stage >= 1 && p) {
-    const { weapon, armor, helmet, boots, charm } = p.gear;
-    const big = form.stage >= 2 ? 2 : 1;
-    if (helmet) { paint(grid, HELMET[big]); pal.M = RARITY[helmet.rarity].color; }
-    if (boots) { paint(grid, BOOTS[big]); pal.B = RARITY[boots.rarity].color; }
-    if (weapon) { WEAPON_ART[weapon.type || 'sword'].forEach((l) => paint(grid, l)); pal.W = weapon.element ? ELEMENTS[weapon.element].color : RARITY[weapon.rarity].color; }
-    if (armor) {
-      const ac = RARITY[armor.rarity].color;
-      if (form.stage === 1) { paint(grid, SCARF); pal.A = ac; } else pal.c = `#${mixRgb(hex(pal.c), hex(ac), 0.55).map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+    const { weapon, armor, charm } = p.gear;
+    if (weapon && key !== 'demonking') {
+      WEAPON_ART[weapon.type || 'sword'].forEach((l) => paint(grid, { ...l, under: true }));
+      pal.W = weapon.element ? ELEMENTS[weapon.element].color : RARITY[weapon.rarity].color;
     }
+    if (armor && pal.c && form.species !== 'void') pal.c = mixHex(pal.c, RARITY[armor.rarity].color, 0.45);
     if (charm && opts.sparkle) { paint(grid, SPARKLE); pal.S = RARITY[charm.rarity].color; }
   }
   if (opts.blink) for (const row of grid) for (let c = 0; c < 16; c++) if (row[c] === 'e' || row[c] === 'w') row[c] = 'b';
@@ -1097,40 +1145,80 @@ function composeMonster(m) {
   return { grid: ART[m.kind].map((row) => row.split('')), pal: MONSTERS[m.kind].pals[m.pal] || MONSTERS[m.kind].pals[0] };
 }
 
-// Returns terminal lines for a sprite on an 18-row canvas, so a ±1 bob never clips the art.
-function renderSprite({ grid, pal }, { dy = 0, tint = null, amount = 0, gray = false, scale = 1, flipX = false } = {}) {
-  const H = 18;
-  const px = (r, c) => {
-    const sr = r - 1 - dy;
-    if (sr < 0 || sr > 15) return null;
-    const ch = grid[sr][flipX ? 15 - c : c];
-    if (ch === '.' || !pal[ch]) return null;
-    let rgb = hex(pal[ch]);
-    if (gray) { const l = Math.round(rgb[0] * 0.3 + rgb[1] * 0.59 + rgb[2] * 0.11); rgb = [l, l, l]; }
-    if (tint) rgb = mixRgb(rgb, hex(tint), amount);
-    return rgb;
-  };
+// An 18-row canvas, so a ±1 bob never clips the art.
+function spritePixels({ grid, pal }, { dy = 0, tint = null, amount = 0, gray = false, flipX = false, dissolve = 0, slash = null } = {}) {
+  const out = [];
+  for (let r = 0; r < 18; r++) {
+    const row = [];
+    for (let c = 0; c < 16; c++) {
+      const sr = r - 1 - dy;
+      const ch = sr < 0 || sr > 15 ? '.' : grid[sr][flipX ? 15 - c : c];
+      if (ch === '.' || !pal[ch] || (dissolve && ((c * 7 + sr * 13) % 10) / 10 < dissolve)) { row.push(null); continue; }
+      let rgb = hex(pal[ch]);
+      if (gray) { const l = Math.round(rgb[0] * 0.3 + rgb[1] * 0.59 + rgb[2] * 0.11); rgb = [l, l, l]; }
+      if (tint) rgb = mixRgb(rgb, hex(tint), amount);
+      row.push(rgb);
+    }
+    out.push(row);
+  }
+  if (slash) for (let i = 0; i < 10; i++) { const y = 3 + i, x = 3 + i + (i % 3 === 0 ? 0 : 1); if (out[y] && x < 16) out[y][x] = hex(slash); }
+  return out;
+}
+
+function renderPixels(pix, scale = 1) {
   const lines = [];
+  const W = pix[0].length;
   if (scale === 2) {
-    for (let r = 0; r < H; r++) {
-      let s = '';
-      for (let c = 0; c < 16; c++) { const p = px(r, c); s += p ? `${fg(p)}██` : `${RESET}  `; }
-      lines.push(s + RESET);
+    for (const row of pix) lines.push(row.map((p) => (p ? `${fg(p)}██` : `${RESET}  `)).join('') + RESET);
+    return lines;
+  }
+  for (let r = 0; r < pix.length; r += 2) {
+    let s = '';
+    for (let c = 0; c < W; c++) {
+      const t = pix[r][c], b = pix[r + 1] && pix[r + 1][c];
+      if (t && b) s += `${fg(t)}${bg(b)}▀`;
+      else if (t) s += `${RESET}${fg(t)}▀`;
+      else if (b) s += `${RESET}${fg(b)}▄`;
+      else s += `${RESET} `;
     }
-  } else {
-    for (let r = 0; r < H; r += 2) {
-      let s = '';
-      for (let c = 0; c < 16; c++) {
-        const t = px(r, c), b = px(r + 1, c);
-        if (t && b) s += `${fg(t)}${bg(b)}▀`;
-        else if (t) s += `${RESET}${fg(t)}▀`;
-        else if (b) s += `${RESET}${fg(b)}▄`;
-        else s += `${RESET} `;
-      }
-      lines.push(s + RESET);
-    }
+    lines.push(s + RESET);
   }
   return lines;
+}
+
+const renderSprite = (art, opts = {}) => renderPixels(spritePixels(art, opts), opts.scale);
+
+// Idle effects live outside the 16×16 body, so the watch view draws pets on a 24-wide canvas with persistent particles.
+const PET_W = 24, PET_X = 4;
+const SOLDIER = ['.kkk.', 'kekek', '.kkk.', 'kkkkk', 'k.k.k', '.k.k.', '.k.k.'];
+const fxState = { particles: [], orbit: 0 };
+
+function petCanvas(art, form, frame, o, shadows) {
+  const body = spritePixels(art, o);
+  const pix = body.map((row) => [...Array(PET_X).fill(null), ...row, ...Array(PET_W - 16 - PET_X).fill(null)]);
+  const set = (x, y, rgb) => { x = Math.round(x); y = Math.round(y); if (y >= 0 && y < 18 && x >= 0 && x < PET_W) pix[y][x] = rgb; };
+  const kind = fxOf(form);
+  const ps = fxState.particles;
+  const dy = o.dy || 0;
+  if (kind === 'fire') {
+    art.grid.forEach((row, y) => row.forEach((ch, x) => { if ((ch === 'f' || ch === 'r') && Math.random() < 0.2) ps.push({ x: PET_X + x, y: y + 1 + dy, vx: (Math.random() - 0.5) * 0.3, vy: -0.6, life: 5, c: Math.random() < 0.5 ? '#ffd23f' : '#ff6a1f' }); }));
+  } else if (kind === 'spark') {
+    if (Math.random() < 0.6) ps.push({ x: PET_X + 1 + Math.random() * 14, y: 2 + Math.random() * 14, vx: 0, vy: 0, life: 1, c: '#fff8a8' });
+    if (frame % 14 < 3) { let x = PET_X + 15, y = 0; for (let i = 0; i < 7; i++) { set(x, y, hex('#fff36b')); x += i % 2 ? 1 : -1; y++; } }
+  } else if (kind === 'void') {
+    fxState.orbit += 0.45;
+    for (let i = 0; i < 3; i++) { const a = fxState.orbit + (i * Math.PI * 2) / 3; set(PET_X + 7.5 + Math.cos(a) * 10, 9 + Math.sin(a) * 5, hex(i % 2 ? '#3df2ff' : '#c4a1ff')); }
+  } else if (kind === 'monarch') {
+    for (let i = 0; i < 3; i++) ps.push({ x: PET_X - 2 + Math.random() * 20, y: 13 + Math.random() * 4, vx: (Math.random() - 0.5) * 0.25, vy: -0.25 - Math.random() * 0.3, life: 8, c: pick(['#140a26', '#2a0f4a', '#4b1d8a']) });
+    if (Math.random() < 0.35) ps.push({ x: PET_X + pick([6, 9]), y: 5 + dy, vx: -0.6, vy: -0.1, life: 4, c: '#7fe3ff' });
+    const phase = frame % 40, a = phase < 8 ? phase / 8 : phase < 28 ? 1 : Math.max(0, 1 - (phase - 28) / 8);
+    [[0, 10], [PET_W - 5, 10]].slice(0, Math.min(2, shadows)).forEach(([sx, sy]) => SOLDIER.forEach((row, y) => [...row].forEach((ch, x) => {
+      if (ch !== '.' && a > 0.15) set(sx + x, sy + y, mixRgb([0, 0, 0], hex(ch === 'e' ? '#7fe3ff' : '#2a1a52'), a));
+    })));
+  }
+  fxState.particles = ps.filter((p) => { p.x += p.vx; p.y += p.vy; p.life--; if (p.life >= 0) set(p.x, p.y, hex(p.c)); return p.life > 0; }).slice(-120);
+  if (o.burst) for (let i = 0; i < 20; i++) { const a = (i / 20) * Math.PI * 2; set(PET_X + 7.5 + Math.cos(a) * o.burst * 1.4, 9 + Math.sin(a) * o.burst * 0.8, hex(i % 2 ? '#ffffff' : '#ffd23f')); }
+  return pix;
 }
 
 function bar(frac, width, on, off = '#3a3a3a', chars = ['█', '░']) {
@@ -1207,7 +1295,7 @@ function cellWidth(str) {
 
 function petSprite(p) {
   const beat = Math.floor(Date.now() / 1000);
-  return renderSprite(composePet(p, p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0 }), { dy: beat % 2 ? 0 : -1, gray: p.faint > 0 })
+  return renderSprite(composePet(formOf(p), p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0, t: beat }), { dy: beat % 2 ? 0 : -1, gray: p.faint > 0 })
     .filter((l) => /[▀▄]/.test(l));
 }
 
@@ -1254,11 +1342,13 @@ function roundInfo(name, m, r) {
     case 'p': return { text: `${r.c ? 'CRIT ' : ''}-${r.d}${E ? ` ${E.icon}` : ''}`, color: r.c ? '#ffd700' : '#ffffff', target: 'mon', tint: E ? E.color : '#ff1744', lunge: 'pet' };
     case 'm': return { text: `${m.name}: ${r.c ? 'CRIT ' : ''}-${r.d}`, color: '#ff8a80', target: 'pet', tint: '#ff1744', lunge: 'mon' };
     case 'chain': return { text: `⚡ chain lightning -${r.d}`, color: E.color, target: 'mon', tint: E.color };
-    case 'dot': return { text: `${E.icon} ${m.name} ${r.el === 'fire' ? 'burns' : 'suffers poison'} -${r.d}`, color: E.color, target: 'mon', tint: E.color };
+    case 'dot': return { text: `${E.icon} ${m.name} ${r.el === 'fire' ? 'burns' : r.el === 'shadow' ? 'burns in shadow flame' : 'suffers poison'} -${r.d}`, color: E.color, target: 'mon', tint: E.color };
     case 'mdot': return { text: `${E.icon} ${name} ${r.el === 'fire' ? 'burns' : 'is poisoned'} -${r.d}`, color: E.color, target: 'pet', tint: E.color };
     case 'frozen': return { text: `❄ ${m.name} is frozen solid!`, color: E.color, target: 'mon', tint: E.color };
     case 'chilled': return { text: `❄ ${name} is chilled and loses a turn`, color: E.color, target: 'pet', tint: E.color };
     case 'afflict': return { text: `${E.icon} ${m.name} ${{ poison: 'poisons', frost: 'chills', fire: 'ignites' }[r.el]} ${name}!`, color: E.color, target: 'pet', tint: E.color };
+    case 'shadow': return { text: `a shadow soldier strikes -${r.d}`, color: '#a66bff', target: 'mon', tint: '#a66bff' };
+    case 'null': return { text: `${name}'s Null Gaze erases the attack`, color: '#c4a1ff', target: 'pet', tint: '#c4a1ff' };
     case 'evade': return { text: `${name} evades!`, color: '#b388ff', target: 'pet', tint: '#b388ff' };
     case 'miss': return { text: `${m.name} dodges ${name}'s attack`, color: '#9e9e9e', lunge: 'pet' };
     case 'potion': return { text: `${name} drinks an Energy Drink!`, color: '#69f0ae', target: 'pet', tint: '#69f0ae' };
@@ -1280,7 +1370,7 @@ function spriteCard(p) {
   const dim = (t) => color('#8a8a8a', t);
   // Redraws are event-driven, so the clock picks a bob/blink frame instead of a timer.
   const beat = Math.floor(Date.now() / 1000);
-  const sprite = renderSprite(composePet(p, p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0 }), { dy: beat % 2 ? 0 : -1, gray: p.faint > 0 })
+  const sprite = renderSprite(composePet(formOf(p), p, { blink: beat % 7 === 0, sparkle: beat % 2 === 0, t: beat }), { dy: beat % 2 ? 0 : -1, gray: p.faint > 0 })
     .filter((l) => /[▀▄]/.test(l));
   const gear = (slot, n) => {
     const it = p.gear[slot];
@@ -1299,7 +1389,7 @@ function spriteCard(p) {
     `${gear('helmet', 24)}  ${gear('boots', 24)}`,
     gear('charm', 24),
     p.faint > 0 ? dim(`💤 fainted — back in ${p.faint} ticks`) : e ? dim(short(`${e.text} · ${ago(e.t)}`, 52)) : dim('patrolling the codebase…'),
-    next ? dim(`✨ Lv${next}${lean && p.stage >= 1 ? ` · leaning ${BRANCHES[lean.branch].forms[0]}${p.stage === 2 ? ' traits' : ''}` : ''}`) : dim('👑 final form'),
+    next ? dim(`✨ Lv${next}${lean && p.stage >= 1 ? ` · ${p.stage === 1 ? 'class' : 'trait'} forming: ${BRANCHES[lean.branch].cls}` : p.stage === 0 ? ' · the egg is studying how you code' : ''}`) : dim(p.monarch ? `🌑 Monarch of Shadows · ${p.shadows}/3 shadows` : '👑 final form'),
   ];
   const rows = Math.max(sprite.length, card.length);
   const out = [];
@@ -1347,7 +1437,10 @@ function fightFrames(lf, name) {
     label = [info.text, info.color];
     php = r.php; mhp = r.mhp;
     const hit = info.target === 'mon' ? { monTint: 0.7, monTintColor: info.tint } : info.target === 'pet' ? { petTint: 0.7, petTintColor: info.tint } : {};
+    if (r.a === 'p' || r.a === 'shadow' || r.a === 'chain') hit.slash = r.el ? ELEMENTS[r.el].color : r.a === 'shadow' ? '#a66bff' : '#ffffff';
+    if (r.c) hit.shake = true;
     frames.push(base({ ...hit, caption: label }));
+    if (r.c) frames.push(base({ ...hit, shake: 'back', caption: label }));
     if (!fast) frames.push(base({ caption: label }));
   }
   const loot = lootOf(lf);
@@ -1358,7 +1451,8 @@ function fightFrames(lf, name) {
       : lf.result === 'retreat'
         ? { caption: ['retreated to fight another day', '#9e9e9e'] }
         : { monGone: true, caption: [`${m.name} fled`, '#9e9e9e'] };
-  if (lf.result === 'win') frames.push(base({ monGray: true }), base({ monGray: true, monTint: 0.5 }));
+  if (lf.result === 'win') for (const d of [0.25, 0.5, 0.75]) frames.push(base({ dissolve: d, caption: label }));
+  if (lf.arise) for (let i = 0; i < 10; i++) frames.push(base({ monGone: true, caption: ['A R I S E', '#a66bff'] }));
   for (let i = 0; i < 14; i++) frames.push(base(end));
   return frames;
 }
@@ -1405,7 +1499,8 @@ function boxFrames(lb) {
 function evolveFrames(evo) {
   const frames = [];
   for (let i = 0; i < 16; i++) frames.push({ form: i % 2 && i > 5 ? evo.to : evo.from, flash: i % 3 === 0 ? 0.85 : 0.2, caption: ['What? Your pet is evolving!', '#ffd700'] });
-  for (let i = 0; i < 16; i++) frames.push({ form: evo.to, flash: i < 3 ? 0.6 : 0, caption: ['✨ Evolution complete! ✨', '#ffd700'] });
+  const title = evo.to.monarch && !evo.from.monarch ? ['🌑 The Monarch of Shadows has risen 🌑', '#a66bff'] : ['✨ Evolution complete! ✨', '#ffd700'];
+  for (let i = 0; i < 16; i++) frames.push({ form: evo.to, flash: i < 3 ? 0.6 : 0, burst: i < 8 ? i + 1 : 0, caption: title });
   return frames;
 }
 
@@ -1416,42 +1511,44 @@ const center = (s, w) => ' '.repeat(Math.max(0, Math.floor((w - vis(s)) / 2))) +
 function draw(p, f, frame) {
   const cols = process.stdout.columns || 80, rows = process.stdout.rows || 24;
   const scale = cols >= 84 && rows >= 44 ? 2 : 1;
-  const cw = 16 * scale, gutter = 3 * scale;
+  const cw = 16 * scale, pw = PET_W * scale, gutter = 3 * scale;
   const s = petStats(p);
   const fightMon = f.fight && !f.monGone ? f.fight.monster : null;
-  const form = f.form || (f.fight ? f.fight.form : { stage: p.stage, branch: p.branch, secondary: p.secondary });
+  const form = f.form || (f.fight ? f.fight.form : formOf(p));
   const resting = !f.fight && p.faint > 0;
-  const petArt = composePet(form, p, { blink: !f.fight && frame % 23 === 0, sparkle: frame % 8 < 4 });
-  const petLines = renderSprite(petArt, {
-    scale, dy: f.fight || resting ? 0 : frame % 6 < 3 ? 0 : -1,
-    gray: f.petGray || resting,
+  const petArt = composePet(form, p, { blink: !f.fight && frame % 23 === 0, sparkle: frame % 8 < 4, t: frame >> 1 });
+  const petLines = renderPixels(petCanvas(petArt, form, frame, {
+    dy: f.fight || resting ? 0 : frame % 6 < 3 ? 0 : -1,
+    gray: f.petGray || resting, burst: f.burst,
     tint: f.flash ? '#ffffff' : f.petTint ? f.petTintColor || '#ff1744' : null, amount: f.flash || f.petTint || 0,
-  });
+  }, frame, p.shadows || 0), scale);
   const monLines = f.anvil
     ? renderSprite(composeAnvil(f.anvil.spark), { scale, tint: f.anvilFlash ? '#ffffff' : null, amount: f.anvilFlash || 0 })
     : f.chest
     ? renderSprite(composeChest(f.chest.id, f.chest.open), { scale, dy: f.chest.open ? 0 : frame % 2 ? -1 : 0, tint: f.chestFlash ? '#ffffff' : null, amount: f.chestFlash || 0 })
     : fightMon
-    ? renderSprite(composeMonster(fightMon), { scale, dy: frame % 4 < 2 ? 0 : -1, gray: f.monGray, tint: f.monTint ? f.monTintColor || '#ff1744' : null, amount: f.monTint || 0 })
+    ? renderSprite(composeMonster(fightMon), { scale, dy: frame % 4 < 2 ? 0 : -1, gray: f.monGray, dissolve: f.dissolve, slash: f.slash, tint: f.monTint ? f.monTintColor || '#ff1744' : null, amount: f.monTint || 0 })
     : petLines.map(() => '');
 
   const out = [];
   out.push('');
-  out.push(center(`${color('#ffd700', '✦ CLAUDE PET ✦')}  ${color('#ffffff', `\x1b[1m${p.name}`)} ${color('#9e9e9e', 'the')} ${color('#ffffff', formName({ ...p, ...form }))}  ${color('#ffd700', `Lv ${p.level}`)}`, cols));
+  const tags = [p.shiny && color('#ffd54f', '✦ shiny'), p.nature && color('#9e9e9e', p.nature), p.branch && p.stage >= 2 && color(BRANCHES[p.branch].mark, `${BRANCHES[p.branch].cls} class`)].filter(Boolean).join(color('#5a5a5a', ' · '));
+  out.push(center(`${color('#ffd700', '✦ CLAUDE PET ✦')}  ${color('#ffffff', `\x1b[1m${p.name}`)} ${color('#9e9e9e', 'the')} ${color('#ffffff', formName(form))}  ${color('#ffd700', `Lv ${p.level}`)}${tags ? `  ${tags}` : ''}`, cols));
   out.push('');
-  const petDx = f.petDx || 0, monDx = f.monDx || (f.chest && f.chest.dx) || 0;
-  const leftPad = Math.max(1, Math.floor((cols - (cw * 2 + gutter * 2 + 4 * scale)) / 2));
+  const shake = f.shake === true ? 1 : f.shake === 'back' ? -1 : 0;
+  const petDx = (f.petDx || 0) + shake, monDx = (f.monDx || (f.chest && f.chest.dx) || 0) - shake;
+  const leftPad = Math.max(1, Math.floor((cols - (pw + cw + gutter * 2 + 4 * scale)) / 2) + shake);
   for (let i = 0; i < petLines.length; i++) {
-    const L = ' '.repeat(gutter + petDx * scale) + petLines[i];
+    const L = ' '.repeat(Math.max(0, gutter + petDx * scale)) + petLines[i];
     const R = monLines[i] ? ' '.repeat(Math.max(0, gutter + monDx * scale)) + monLines[i] : '';
-    out.push(' '.repeat(leftPad) + padTo(L, cw + gutter * 2) + ' '.repeat(4 * scale) + R);
+    out.push(' '.repeat(leftPad) + padTo(L, pw + gutter * 2) + ' '.repeat(4 * scale) + R);
   }
   const php = f.fight ? f.php : p.hp, pmax = f.fight ? f.fight.petMaxHp : s.maxHp;
   const hpLine = (cur, max) => `${bar(cur / max, cw - 2, hpColor(cur / max))}`;
-  const petHp = padTo(' '.repeat(gutter) + hpLine(php, pmax), cw + gutter * 2);
+  const petHp = padTo(' '.repeat(gutter + PET_X * scale) + hpLine(php, pmax), pw + gutter * 2);
   const monHp = fightMon ? ' '.repeat(gutter) + hpLine(f.mhp, fightMon.maxHp) : '';
   out.push(' '.repeat(leftPad) + petHp + ' '.repeat(4 * scale) + monHp);
-  const petHpTxt = padTo(' '.repeat(gutter) + color('#9e9e9e', `HP ${Math.round(php)}/${pmax}`), cw + gutter * 2);
+  const petHpTxt = padTo(' '.repeat(gutter + PET_X * scale) + color('#9e9e9e', `HP ${Math.round(php)}/${pmax}`), pw + gutter * 2);
   const weak = fightMon && MONSTERS[fightMon.kind].weak;
   const monTxt = fightMon ? ' '.repeat(gutter) + color(fightMon.boss ? '#ff5252' : '#9e9e9e', `${fightMon.name} Lv${fightMon.level}`) + (weak ? ` ${color('#8a8a8a', `weak ${ELEMENTS[weak].icon}`)}` : '') : '';
   out.push(' '.repeat(leftPad) + petHpTxt + ' '.repeat(4 * scale) + monTxt);
@@ -1487,7 +1584,8 @@ function draw(p, f, frame) {
   const lean = leaning(p);
   if (nextStage) {
     let t = `next evolution at Lv ${nextStage}`;
-    if (p.stage >= 1 && lean) t += ` · leaning ${p.stage === 1 ? BRANCHES[lean.branch].forms[0] : `${BRANCHES[lean.branch].forms[0]} traits`} (${lean.bucket} ${Math.round(lean.share * 100)}%)`;
+    if (p.stage >= 1 && lean) t += ` · ${p.stage === 1 ? 'class' : 'trait'} forming: ${BRANCHES[lean.branch].cls} (${lean.bucket} ${Math.round(lean.share * 100)}%)`;
+    if (p.stage === 0) t += ' · the egg is studying how you code';
     out.push(`  ${color('#ffd700', '✨')} ${dim(t)}`);
   } else out.push(`  ${color('#ffd700', '👑')} ${dim('final form reached')}`);
   out.push(`  ${dim(`kills ${p.stats.kills} · bosses ${p.stats.bosses} · faints ${p.stats.faints} · items ${p.stats.items} · crafted ${p.stats.crafted || 0} · ticks ${p.stats.ticks}`)}`);
@@ -1541,11 +1639,35 @@ function sim(n, bucket) {
   console.log(`${emoji(p)} ${p.name} ${formName(p)} Lv${p.level} kills=${p.stats.kills} faints=${p.stats.faints} bosses=${p.stats.bosses} items=${p.stats.items}`);
 }
 
+function seedInfo() {
+  const p = load();
+  if (!p) return console.log('No pet yet. It hatches from your next Claude Code tool call.');
+  const dim = (t) => color('#8a8a8a', t);
+  if (!p.seed) {
+    const e = p.egg || newEgg();
+    const top = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${k} ${v}`).join(' · ') || '—';
+    const peak = e.hours.indexOf(Math.max(...e.hours));
+    console.log(`🥚 ${p.name} is still an egg (Lv ${p.level}/5) and is studying how you code:`);
+    console.log(`  ${dim('tool mix ')} ${top(e.mix)}`);
+    console.log(`  ${dim('peak hour')} ${Math.max(...e.hours) ? `${peak}:00` : '—'}`);
+    console.log(`  ${dim('languages')} ${top(e.ext)}`);
+    console.log(`  ${dim('projects ')} ${Object.keys(e.repos).length} ${dim('(hashed)')}`);
+    console.log(`  ${dim('shipping ')} ${e.commits} commits · ${e.testsPassed} test runs passed · ${e.testsFailed} failed`);
+    return console.log(`  ${dim('At Lv 5 all of this is hashed into a seed that picks the species, nature and shiny roll.')}`);
+  }
+  console.log(`${emoji(p)} ${p.name} · seed ${p.seed.slice(0, 16)}…`);
+  console.log(`  ${dim('species')} ${SPECIES[p.species].label} (${FORMS[SPECIES[p.species].forms[0]].name} line) · signature ${SPECIES[p.species].signature}`);
+  console.log(`  ${dim('nature ')} ${p.nature}`);
+  console.log(`  ${dim('shiny  ')} ${p.shiny ? 'yes ✦' : 'no (1 in 128)'}`);
+  console.log(`  ${dim('class  ')} ${p.branch ? BRANCHES[p.branch].cls : 'decided at Lv 15'}`);
+  console.log(`  ${dim('monarch')} ${p.monarch ? `yes · ${p.shadows}/3 shadow soldiers` : 'not yet (1% at Lv 30, again at Lv 40)'}`);
+}
+
 function status() {
   const p = load();
   if (!p) return console.log('No pet yet — it hatches from your next Claude Code tool call.');
   console.log(statusLines(p).join('\n'));
-  console.log(renderSprite(composePet(p, p, { sparkle: true })).join('\n'));
+  console.log(renderSprite(composePet(formOf(p), p, { sparkle: true })).join('\n'));
 }
 
 const HOOK_EVENTS = ['PostToolUse', 'PostToolUseFailure', 'SubagentStart', 'Stop', 'SessionStart'];
@@ -1602,6 +1724,7 @@ try {
   else if (cmd === 'statusline') statusline();
   else if (cmd === 'watch' || !cmd) watch();
   else if (cmd === 'status') status();
+  else if (cmd === 'seed') seedInfo();
   else if (cmd === 'sim') sim(parseInt(args[0] || '100', 10), args[1]);
   else if (cmd === 'mode') {
     if (MODES.includes(args[0])) setConfig('mode', args[0]);
@@ -1616,7 +1739,7 @@ try {
   else if (cmd === 'install') install();
   else if (cmd === 'uninstall') uninstall();
   else if (cmd === 'reset') { fs.rmSync(STATE, { force: true }); console.log('Pet released into the wild.'); }
-  else console.log('usage: pet [watch|status|mode full|minimal|compact|width <n|auto>|install|uninstall|sim <n> [bucket]|reset]');
+  else console.log('usage: pet [watch|status|seed|mode full|minimal|compact|width <n|auto>|install|uninstall|sim <n> [bucket]|reset]');
 } catch (e) {
   if (cmd !== 'hook' && cmd !== 'statusline') throw e;
 }

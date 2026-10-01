@@ -4,6 +4,8 @@ An idle RPG pet that lives in your [Claude Code](https://claude.com/claude-code)
 
 ![sprites](docs/sprites.png)
 
+![starters](docs/starters.png)
+
 ## Install
 
 Requires Node 18+ and Claude Code.
@@ -28,14 +30,16 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
 ## How it plays
 
 - **Ticks:** every tool call is a tick. Monsters spawn on about 15% of ticks, and more often when a tool call fails.
-- **Evolution:** egg → hatchling (Lv 5) → branch form (Lv 15) → legendary (Lv 30). The branch depends on what you do **more than you usually do**:
-  - Bash → Shell Drake
-  - Edits → Quill Golem
-  - Reads and searches → Grep Owl
-  - Failed tool calls → Chaos Imp
-  - Subagents → Hive Wisp
+- **Your starter is seeded by how you code:** while it's an egg (Lv 1–5), the pet records your tool mix, the hours you code, which file types you edit, how many repos you work in (hashed, never named), and your commits and test runs. At hatching all of that is hashed into a SHA-256 seed, which picks the species, the nature (a small stat lean) and a 1-in-128 shiny palette. `pet seed` shows what the egg has seen so far.
+- **Three starter lines:** each evolves at Lv 5, 15 and 30.
 
-  The legendary form also gains a second trait from your next-strongest habit.
+  | Line | Forms | Signature skill |
+  |---|---|---|
+  | 🔥 Fire | Pyrobit → Blazewyrm → Infernus | Ember Breath: innate fire, burns |
+  | ⚡ Lightning | Voltcub → Stormfang → Fenrir Thunderlord | Static Pounce: always strikes first, extra hits |
+  | 🌑 Void | Glitchling → Nullwraith → Void Sovereign | Null Gaze: 20% chance to erase an enemy attack |
+- **Class:** at Lv 15, whatever you do **more than you usually do** sets the pet's class, which tints its markings and gives a stat bonus. Bash → Shell, edits → Scribe, reads → Seeker, failures → Chaos, subagents → Hive.
+- **The Demon King:** at the Lv 30 evolution (and again at Lv 40), a pet has a 1% chance to rise as the Monarch of Shadows instead. It wields the Abyssal Edge, a demon-tier blade that burns with shadow flame on every hit. Monsters it slays can rise again as shadow soldiers, up to 3, which strike at the start of every fight.
 - **Loot:** 5 gear slots and 5 rarities. The top rarity, Mythic, can only be crafted.
   - Weapon types: sword, axe, dagger, staff.
   - Elements: 🔥 fire, ☠ poison, ❄ frost, ⚡ lightning.
