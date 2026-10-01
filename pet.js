@@ -5,7 +5,7 @@ const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
 const crypto = require('crypto');
-const { FORMS, MONSTER_ART, MONSTER_PALS } = require('./art.js');
+const { FORMS, MONSTER_ART, MONSTER_PALS, GEAR_ANCHORS } = require('./art.js');
 
 const HOME = process.env.CLAUDE_PET_HOME || path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'claude-pet');
 const STATE = path.join(HOME, 'state.json');
@@ -185,14 +185,6 @@ const ART = {
 const mirror = (pts) => pts.concat(pts.map(([r, c]) => [r, 15 - c]));
 const layer = (ch, pts, under = false) => ({ ch, pts, under });
 
-const col = (c, from, to) => Array.from({ length: to - from + 1 }, (_, i) => [from + i, c]);
-const WEAPON_ART = {
-  sword: [layer('W', col(0, 3, 9)), layer('H', [[10, 0], [10, 1]]), layer('G', [[11, 0], [12, 0]])],
-  axe: [layer('G', col(0, 3, 12)), layer('W', [[3, 1], [4, 1], [5, 1], [4, 2]])],
-  dagger: [layer('W', [[8, 0], [9, 0], [10, 0]]), layer('H', [[11, 0], [11, 1]]), layer('G', [[12, 0]])],
-  staff: [layer('G', col(0, 4, 13)), layer('W', [[2, 0], [2, 1], [3, 0], [3, 1]])],
-};
-const SPARKLE = layer('S', [[0, 1], [1, 0], [1, 2], [2, 1]], true);
 
 const BASE_PAL = {
   o: '#2b1d2e', b: '#f2a65a', h: '#ffd8a8', c: '#ffe8c2', w: '#ffffff', e: '#1a1a2e',
@@ -1117,6 +1109,70 @@ function paint(grid, l) {
 
 const mixHex = (a, b, t) => toHex(mixRgb(hex(a), hex(b), t));
 
+// Gear art uses its own palette chars so it never collides with a form's colours.
+const WEAPON_MINI = {
+  sword: ['.o.', 'olo', 'olo', 'olo', 'olo', 'YyY', 'obo', '.G.'],
+  axe: ['oo..', 'lmY.', 'lmY.', 'lmY.', 'oob.', '..b.', '..b.', '..Y.'],
+  dagger: ['.o.', 'olo', 'olo', 'YyY', '.b.'],
+  staff: ['oqo', 'qQk', 'oko', '.Y.', '.b.', '.b.', '.b.', '.b.'],
+};
+const MINI_CHAR = { o: '!', l: '9', m: '0', Y: '4', y: '#', b: '$', G: '+', q: '%', Q: '&', k: '*' };
+const GEAR_FIT = [['#d0d4da', '#8f96a1'], ['#cfe4ff', '#7fa7d9'], ['#eadcff', '#b694e8'], ['#fff1a8', '#e0aa2e'], ['#ffd0c4', '#ff5a3c'], ['#e0aaff', '#5a2a8a']];
+const BLADE_TINT = { fire: ['#ffe08a', '#ff8c2a'], frost: ['#e6fbff', '#7fd8ff'], poison: ['#d6ff9e', '#76d13a'], lightning: ['#fffbd1', '#ffe14d'], shadow: ['#d9b8ff', '#7b2cbf'] };
+
+function plateColors(rarity) {
+  if (rarity === 0) return ['#c4cad1', '#8a929e', '#535a65'];
+  if (rarity === 4) return ['#f2c4b8', '#b85a48', '#6b2418'];
+  if (rarity === 5) return ['#6e5a8a', '#3b2d52', '#1d1530'];
+  return ['#e8eef5', '#a7b3c2', '#5d6878'].map((c) => mixHex(c, RARITY[rarity].color, 0.22));
+}
+
+function dressPet(grid, pal, key, gear, opts) {
+  const A = GEAR_ANCHORS[key];
+  if (!A) return;
+  const set = (x, y, ch) => { if (y >= 0 && y < 16 && x >= 0 && x < 16) grid[y][x] = ch; };
+  const BODY = new Set(['b', 'h', 'c', 'C', 'k', 'd']);
+  const { weapon, armor, helmet, boots, charm } = gear;
+  if (armor && A.chest) {
+    const [l, m, d] = plateColors(armor.rarity);
+    Object.assign(pal, { 1: l, 2: m, 3: d, 4: GEAR_FIT[armor.rarity][1] });
+    const { x0, x1, y0, y1, body } = A.chest;
+    const plate = [];
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (body ? BODY.has(grid[y][x]) : grid[y][x] === 'c' || grid[y][x] === 'h') plate.push([x, y]);
+    const top = Math.min(...plate.map(([, y]) => y)), bottom = Math.max(...plate.map(([, y]) => y));
+    for (const [x, y] of plate) grid[y][x] = y === top ? '4' : y === bottom ? '3' : grid[y][x] === 'h' ? '1' : '2';
+  }
+  if (boots && A.feet) {
+    pal[6] = boots.rarity === 5 ? '#33264a' : '#7a4f2c';
+    pal[7] = GEAR_FIT[boots.rarity][1];
+    let bottom = 15;
+    while (bottom > 0 && grid[bottom].every((c) => c === '.')) bottom--;
+    for (const y of [bottom - 1, bottom]) for (let x = 0; x < 16; x++) if (BODY.has(grid[y][x])) grid[y][x] = y === bottom - 1 ? '7' : '6';
+  }
+  if (helmet && A.head) {
+    const [l, m, d] = plateColors(helmet.rarity);
+    Object.assign(pal, { 1: l, 2: m, 3: d, 4: GEAR_FIT[helmet.rarity][1], 5: RARITY[helmet.rarity].color });
+    const { x0, x1, y } = A.head;
+    for (let x = x0 + 1; x < x1; x++) set(x, y - 1, x === x0 + 1 ? '1' : x === x1 - 1 ? '3' : '2');
+    for (let x = x0; x <= x1; x++) set(x, y, x === x0 ? '1' : x === x1 ? '3' : '2');
+    for (let x = x0; x <= x1; x++) set(x, y + 1, '4');
+    if (helmet.rarity >= 2) set(Math.floor((x0 + x1) / 2), y - 2, '5');
+  }
+  if (charm && A.neck) {
+    pal[8] = opts.sparkle ? mixHex(RARITY[charm.rarity].color, '#ffffff', 0.5) : RARITY[charm.rarity].color;
+    set(A.neck.x, A.neck.y, '8');
+  }
+  if (weapon && A.hand) {
+    const art = WEAPON_MINI[weapon.type || 'sword'];
+    const blade = BLADE_TINT[weapon.element] || (weapon.rarity === 0 ? ['#c4cad1', '#8a929e'] : ['#e8eef5', '#a7b3c2']);
+    const fit = GEAR_FIT[Math.min(weapon.rarity, 5)];
+    const orb = weapon.element ? BLADE_TINT[weapon.element] : [mixHex(RARITY[weapon.rarity].color, '#ffffff', 0.5), RARITY[weapon.rarity].color];
+    Object.assign(pal, { '!': '#14121c', 9: blade[0], 0: blade[1], '#': fit[0], 4: fit[1], '$': '#8a5a34', '+': weapon.rarity ? RARITY[weapon.rarity].color : fit[1], '%': orb[0], '&': orb[1], '*': mixHex(orb[1], '#000000', 0.45) });
+    const w = art[0].length, left = A.hand.x - (w === 4 ? 2 : 1), top = A.hand.y - art.length + 1;
+    art.forEach((row, dy) => [...row].forEach((ch, dx) => { if (ch !== '.') set(left + dx, top + dy, MINI_CHAR[ch]); }));
+  }
+}
+
 function composePet(form, p, opts = {}) {
   const key = formKey(form);
   const src = key === 'egg' ? { rows: ART.egg, pal: BASE_PAL } : FORMS[key];
@@ -1127,16 +1183,8 @@ function composePet(form, p, opts = {}) {
   if (form.branch && form.stage >= 2 && pal.h) pal.h = mixHex(pal.h, BRANCHES[form.branch].mark, 0.55);
   const fx = fxOf(form);
   if (fx === 'fire' && t % 2) [pal.f, pal.r] = [pal.r, pal.f];
-  if (fx === 'monarch') { if (t % 2) pal.p = '#d9b8ff'; if (t % 3 === 0) pal.e = '#7fe3ff'; }
-  if (form.stage >= 1 && p) {
-    const { weapon, armor, charm } = p.gear;
-    if (weapon && key !== 'demonking') {
-      WEAPON_ART[weapon.type || 'sword'].forEach((l) => paint(grid, { ...l, under: true }));
-      pal.W = weapon.element ? ELEMENTS[weapon.element].color : RARITY[weapon.rarity].color;
-    }
-    if (armor && pal.c && form.species !== 'void') pal.c = mixHex(pal.c, RARITY[armor.rarity].color, 0.45);
-    if (charm && opts.sparkle) { paint(grid, SPARKLE); pal.S = RARITY[charm.rarity].color; }
-  }
+  if (fx === 'monarch') { if (t % 2) { pal.p = '#d9b8ff'; pal.x = '#ff2a2a'; } if (t % 3 === 0) { pal.e = '#7fe3ff'; pal.q = '#ffb347'; } }
+  if (form.stage >= 1 && p && loadConfig().gear !== false) dressPet(grid, pal, key, p.gear, opts);
   if (opts.blink) for (const row of grid) for (let c = 0; c < 16; c++) if (row[c] === 'e' || row[c] === 'w') row[c] = 'b';
   return { grid, pal };
 }
@@ -1211,6 +1259,7 @@ function petCanvas(art, form, frame, o, shadows) {
   } else if (kind === 'monarch') {
     for (let i = 0; i < 3; i++) ps.push({ x: PET_X - 2 + Math.random() * 20, y: 13 + Math.random() * 4, vx: (Math.random() - 0.5) * 0.25, vy: -0.25 - Math.random() * 0.3, life: 8, c: pick(['#140a26', '#2a0f4a', '#4b1d8a']) });
     if (Math.random() < 0.35) ps.push({ x: PET_X + pick([6, 9]), y: 5 + dy, vx: -0.6, vy: -0.1, life: 4, c: '#7fe3ff' });
+    if (Math.random() < 0.6) ps.push({ x: PET_X + 13 + Math.random() * 3, y: 10 + Math.random() * 6 + dy, vx: (Math.random() - 0.5) * 0.2, vy: -0.45, life: 5, c: pick(['#ff3a1a', '#8b0a0a', '#ffb347']) });
     const phase = frame % 40, a = phase < 8 ? phase / 8 : phase < 28 ? 1 : Math.max(0, 1 - (phase - 28) / 8);
     [[0, 10], [PET_W - 5, 10]].slice(0, Math.min(2, shadows)).forEach(([sx, sy]) => SOLDIER.forEach((row, y) => [...row].forEach((ch, x) => {
       if (ch !== '.' && a > 0.15) set(sx + x, sy + y, mixRgb([0, 0, 0], hex(ch === 'e' ? '#7fe3ff' : '#2a1a52'), a));
@@ -1731,6 +1780,10 @@ try {
     else if (args[0]) { console.log(`unknown mode "${args[0]}" — use ${MODES.join(', ')}`); process.exitCode = 1; }
     console.log(`statusline mode: ${statusMode(loadConfig())}  (full = sprite + stats card, minimal = pet only on the far right, compact = 2 text lines)`);
   }
+  else if (cmd === 'gear') {
+    if (args[0] === 'on' || args[0] === 'off') setConfig('gear', args[0] === 'on');
+    console.log(`gear on the pet: ${loadConfig().gear === false ? 'hidden (still equipped and listed in the card)' : 'shown'}`);
+  }
   else if (cmd === 'sprite') { setConfig('mode', args[0] === 'off' ? 'compact' : 'full'); console.log(`statusline mode: ${statusMode(loadConfig())}`); }
   else if (cmd === 'width') {
     setConfig('width', args[0] && args[0] !== 'auto' ? parseInt(args[0], 10) : undefined);
@@ -1739,7 +1792,7 @@ try {
   else if (cmd === 'install') install();
   else if (cmd === 'uninstall') uninstall();
   else if (cmd === 'reset') { fs.rmSync(STATE, { force: true }); console.log('Pet released into the wild.'); }
-  else console.log('usage: pet [watch|status|seed|mode full|minimal|compact|width <n|auto>|install|uninstall|sim <n> [bucket]|reset]');
+  else console.log('usage: pet [watch|status|seed|gear on|off|mode full|minimal|compact|width <n|auto>|install|uninstall|sim <n> [bucket]|reset]');
 } catch (e) {
   if (cmd !== 'hook' && cmd !== 'statusline') throw e;
 }

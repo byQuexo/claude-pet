@@ -64,6 +64,7 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
 | `pet watch` | animated full view |
 | `pet status` | print the statusline card once |
 | `pet mode full` / `minimal` / `compact` | full: sprite + stats card · minimal: only the pet, far right, beside your statusline · compact: 2 text lines |
+| `pet gear on` / `off` | show or hide gear drawn on the pet (it stays equipped and listed in the card) |
 | `pet width <n>` / `auto` | terminal width for minimal mode, if `$COLUMNS` is wrong |
 | `pet install` / `uninstall` | wire into, or remove from, Claude Code settings |
 | `pet sim <n> [bash\|edit\|read\|fail\|agent]` | fast-forward n ticks (this cheats your own save) |

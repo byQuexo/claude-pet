@@ -202,7 +202,7 @@ const FORMS = {
   },
   demonking: {
     name: 'The Demon King',
-    pal: { o: '#05030a', k: '#2a2145', b: '#1a1530', h: '#3d3466', c: '#0d0a1a', C: '#3a1670', e: '#c8f4ff', s: '#120e1e', p: '#a66bff' },
+    pal: { o: '#05030a', k: '#2a2145', b: '#1a1530', h: '#3d3466', c: '#0d0a1a', C: '#3a1670', e: '#c8f4ff', p: '#a66bff', s: '#0a0508', q: '#ff3a1a', x: '#8b0a0a', Z: '#2a1a1a', R: '#4a0a10', E: '#ff2a2a' },
     rows: [
       '...p........p...',
       '...ko.oooo.ok...',
@@ -211,15 +211,15 @@ const FORMS = {
       '.....oebbeo.....',
       '.....obbbbo.....',
       '..ooCobboCoo....',
-      '.oCCobhbboCCo...',
-      'oCcobbbbbbocCok.',
-      'oCcobbbbbbocC.sp',
-      'oCcoobbbboocC.sp',
-      '.oCcobbbbocCo.sp',
-      '.oCcob..bocCo.sp',
-      '..oCob..boCo..sp',
-      '..oCoh..hoCo...p',
-      '...oo....oo.....',
+      '.oCCobhbboCCoR.R',
+      'oCcobbbbbbocCZEZ',
+      'oCcobbbbbbocCxsx',
+      'oCcoobbbboocCsqx',
+      '.oCcobbbbocCoxss',
+      '.oCcob..bocCosqx',
+      '..oCob..boCo.xsx',
+      '..oCoh..hoCo..x.',
+      '...oo....oo...x.',
     ],
   },
 };
@@ -363,4 +363,19 @@ const MONSTER_PALS = {
   kraken: { o: '#0a1433', b: '#326ce5', h: '#7aa2ff', w: '#ffffff', e: '#111111', c: '#ffffff' },
 };
 
-module.exports = { FORMS, MONSTER_ART, MONSTER_PALS };
+
+// Where gear sits on each form: head = helmet band row (trim lands on y+1, above the eyes), hand = weapon grip (bottom-centre),
+// chest = armour plate rect (belly pixels only, unless body: true), neck = charm pixel, feet = whether boots recolour the bottom two rows.
+const GEAR_ANCHORS = {
+  pyrobit: { head: { x0: 8, x1: 13, y: 3 }, hand: { x: 4, y: 8 }, chest: { x0: 7, x1: 13, y0: 9, y1: 12 }, neck: { x: 9, y: 8 }, feet: true },
+  blazewyrm: { head: { x0: 9, x1: 14, y: 1 }, hand: { x: 14, y: 13 }, chest: { x0: 6, x1: 13, y0: 7, y1: 12 }, neck: { x: 8, y: 6 }, feet: true },
+  infernus: { head: { x0: 5, x1: 10, y: 2 }, hand: { x: 14, y: 12 }, chest: { x0: 5, x1: 10, y0: 8, y1: 12 }, neck: { x: 7, y: 7 }, feet: true },
+  voltcub: { head: { x0: 8, x1: 14, y: 4 }, hand: { x: 2, y: 7 }, chest: { x0: 4, x1: 12, y0: 8, y1: 12 }, neck: { x: 9, y: 8 }, feet: true },
+  stormfang: { head: { x0: 9, x1: 14, y: 1 }, hand: { x: 14, y: 13 }, chest: { x0: 3, x1: 12, y0: 7, y1: 12 }, neck: { x: 8, y: 7 }, feet: true },
+  fenrir: { head: { x0: 5, x1: 10, y: 4 }, hand: { x: 13, y: 13 }, chest: { x0: 3, x1: 12, y0: 9, y1: 13 }, neck: { x: 7, y: 11 }, feet: true },
+  glitchling: { head: { x0: 5, x1: 10, y: 4 }, hand: { x: 14, y: 7 }, chest: { x0: 4, x1: 11, y0: 10, y1: 12, body: true }, neck: { x: 7, y: 10 }, feet: false },
+  nullwraith: { head: { x0: 5, x1: 10, y: 1 }, hand: { x: 14, y: 7 }, chest: { x0: 4, x1: 11, y0: 8, y1: 11, body: true }, neck: { x: 7, y: 8 }, feet: false },
+  sovereign: { head: null, hand: { x: 14, y: 8 }, chest: { x0: 4, x1: 11, y0: 8, y1: 11, body: true }, neck: { x: 7, y: 7 }, feet: false },
+};
+
+module.exports = { FORMS, MONSTER_ART, MONSTER_PALS, GEAR_ANCHORS };
