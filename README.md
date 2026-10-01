@@ -8,7 +8,7 @@ An idle RPG pet that lives in your [Claude Code](https://claude.com/claude-code)
 
 ## Install
 
-Requires Node 18+ and Claude Code.
+Requires Node 18+, Claude Code, and a terminal with truecolor and Unicode block characters (Ghostty, iTerm2, WezTerm, Kitty, Alacritty, recent macOS Terminal).
 
 ```bash
 git clone https://github.com/byQuexo/claude-pet.git ~/.claude-pet
@@ -24,8 +24,16 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
 
 ## Watching it
 
-- **Statusline:** a 16×16 pixel-art sprite plus a stats card showing level, HP, XP, ATK/ARM/EVA, all 5 gear slots, gold, potions and buffs. It refreshes once a second, so the pet bobs and blinks.
-- **`pet watch`:** the full animated view. Open it in a split next to Claude (e.g. Cmd+D in Ghostty). The arena replays every fight blow by blow and shows crate openings, the crafting anvil and evolutions; between fights the last foe waits on the right. Below it are a gear strip with item icons, stats and active buffs, and a log that collapses repeats. Keys: `q` quit, `g` gear on/off, `r` replay the last fight.
+- **Statusline:** refreshes once a second, so the pet bobs, blinks and its effects pulse. Three modes (`pet mode`):
+  - `full`: the 16×16 sprite plus a stats card with level, HP, XP, ATK/ARM/EVA, all 5 gear slots, gold, potions and buffs
+  - `minimal`: only the pet, at the far right, beside your existing statusline
+  - `compact`: two lines of text
+- **`pet watch`:** the full animated view, framed in panels. Open it in a split next to Claude (e.g. Cmd+D in Ghostty).
+  - **Arena:** replays every fight blow by blow: lunges, element-coloured slashes, crit shake, monsters dissolving when they die. It also shows crate openings, the crafting anvil and evolutions. Between fights the arena stays clear, with the last result and the town countdown.
+  - **Gear:** a tile for each slot in its rarity colour (legendaries sparkle), with name, power score and top stat.
+  - **Stats and active:** your stats on one side; buffs, tomes, set progress, unique effects and badges on the other.
+  - **Log:** repeats collapse (`you committed ×3`) and purchases group.
+  - **Keys:** `q` quit · `g` gear on/off · `r` replay the last fight.
 
 ## How it plays
 
@@ -78,6 +86,24 @@ Open a new session and your egg appears after the first tool call. `node ~/.clau
 | `pet install` / `uninstall` | wire into, or remove from, Claude Code settings |
 | `pet sim <n> [bash\|edit\|read\|fail\|agent]` | fast-forward n ticks (this cheats your own save) |
 | `pet reset` | release your pet and start over |
+
+## System load
+
+Measured on a Mac with Node 18:
+
+| What | How often | Cost |
+|---|---|---|
+| Hook | once per tool call, async | ~30 ms, then exits |
+| Statusline | every second | ~40 ms with the wrapped statusline cached; ~41 MB peak RAM, freed on exit |
+| `pet watch` | only while open | ~0.6% CPU, ~45 MB RAM |
+
+Nothing runs in the background unless `pet watch` is open. If the 1-second refresh is too much, set `"refreshInterval": 2` under `statusLine` in `~/.claude/settings.json`.
+
+## Troubleshooting
+
+- **The pet disappeared from the statusline:** another tool (for example a statusline plugin's setup command) rewrote `statusLine` in `settings.json`. Run `pet install` again; it wraps whatever statusline is there now.
+- **Minimal mode is cut off at the right:** Claude Code gives the statusline a little less than the full terminal width. Run `pet width <n>` with a smaller number than your terminal's width, or `pet width auto` to go back.
+- **Blocks look striped or shifted:** your terminal or font is missing truecolor or block characters. Try one of the terminals listed under Install.
 
 ## Privacy
 
