@@ -1,4 +1,3 @@
-'use strict';
 // Sprite data for the starter lines, the Demon King and the second wave of monsters: 16×16, one char per pixel, '.' is transparent.
 
 const FORMS = {
@@ -695,4 +694,4 @@ const ITEM_ICONS = {
 };
 const ICON_MATERIALS = {"STEEL":{"l":"#e8eef5","m":"#a7b3c2","d":"#5d6878"},"DULL":{"l":"#c4cad1","m":"#8a929e","d":"#535a65"},"BLADE":{"fire":{"l":"#ffe08a","m":"#ff8c2a","d":"#c2410c"},"frost":{"l":"#e6fbff","m":"#7fd8ff","d":"#2f8fd1"},"poison":{"l":"#d6ff9e","m":"#76d13a","d":"#2f7a1f"},"lightning":{"l":"#fffbd1","m":"#ffe14d","d":"#c9a400"},"shadow":{"l":"#d9b8ff","m":"#7b2cbf","d":"#2a0f4a"}},"FITTINGS":[{"y":"#d0d4da","Y":"#8f96a1","z":"#4f5560"},{"y":"#cfe4ff","Y":"#7fa7d9","z":"#3c5f8f"},{"y":"#eadcff","Y":"#b694e8","z":"#6b4ba3"},{"y":"#fff1a8","Y":"#e0aa2e","z":"#8a5a10"},{"y":"#ffd0c4","Y":"#ff5a3c","z":"#8a1a0e"},{"y":"#e0aaff","Y":"#5a2a8a","z":"#1a0a2a"}],"LEATHER":{"b":"#8a5a34","B":"#4f3019"}};
 
-module.exports = { FORMS, MONSTER_ART, MONSTER_PALS, GEAR_ANCHORS, SECRET_BOSS, ITEM_ICONS, ICON_MATERIALS };
+export { FORMS, MONSTER_ART, MONSTER_PALS, GEAR_ANCHORS, SECRET_BOSS, ITEM_ICONS, ICON_MATERIALS };

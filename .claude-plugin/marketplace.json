@@ -1,0 +1,14 @@
+{
+  "name": "idlemon",
+  "description": "idlemon, an idle RPG pet for Claude Code",
+  "owner": {
+    "name": "byQuexo"
+  },
+  "plugins": [
+    {
+      "name": "idlemon",
+      "source": "./",
+      "description": "An idle RPG pet that fights, loots and evolves while you code"
+    }
+  ]
+}
