@@ -1,0 +1,10 @@
+{
+  "name": "idlemon",
+  "description": "An idle RPG pet that fights, loots and evolves while you code, drawn above your prompt and in a pane",
+  "author": {
+    "name": "Tim Gühnemann"
+  },
+  "homepage": "https://github.com/byQuexo/claude-pet",
+  "repository": "https://github.com/byQuexo/claude-pet",
+  "license": "MIT"
+}

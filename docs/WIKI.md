@@ -1,4 +1,4 @@
-# claude-pet wiki
+# idlemon wiki
 
 Everything about your pet, its gear and the monsters it meets.
 
@@ -15,7 +15,7 @@ Your pet plays on its own while you work. Monsters show up as you code, and more
 
 ## Your pet
 
-Every pet starts as an egg. The egg quietly watches how you work, then hatches at Lv 5 into one of three species. That same moment decides its nature and whether it's shiny. Run `pet seed` to see what yours got. It evolves again at Lv 15 and reaches its final form at Lv 30, which is noticeably stronger.
+Every pet starts as an egg. The egg quietly watches how you work, then hatches at Lv 5 into one of three species. That same moment decides its nature and whether it's shiny. Run `/idlemon seed` to see what yours got. It evolves again at Lv 15 and reaches its final form at Lv 30, which is noticeably stronger.
 
 | Species | Forms (Lv 5 → 15 → 30) | Signature skill |
 |---|---|---|

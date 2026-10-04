@@ -1,22 +1,11 @@
 #!/usr/bin/env node
-'use strict';
 // Builds docs/WIKI.md from the game's own tables, so the numbers can't drift from the code: node tools/wiki.js
-const fs = require('fs');
-const path = require('path');
-const Module = require('module');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as G from '../engine.js';
 
-const root = path.join(__dirname, '..');
-const file = path.join(root, 'pet.js');
-const exportsList = ['SPECIES', 'NATURES', 'BRANCHES', 'FORMS', 'MONSTERS', 'KINDS_BY_BUCKET', 'BOSS_KINDS', 'ELITE_KINDS', 'RARITY', 'ELEMENTS', 'ROLL_ELEMENTS',
-  'ELEMENT_CHANCE', 'AFFIX_CHANCE', 'SLOTS', 'WEAPON_TYPES', 'GEAR_BASES', 'SLOT_STATS', 'AFFIXES', 'BUFFS', 'TOMES', 'BOXES', 'UNIQUES', 'SETS', 'SET_CHANCE',
-  'UNIQUE_CHANCE', 'MAX_POTIONS', 'TOWN_EVERY', 'SPAWN_CHANCE', 'FAINT_TICKS', 'BOSS_EVERY', 'MAX_PLUS', 'NULL_GAZE', 'MONARCH_CHANCE', 'SECRET_CHANCE',
-  'STAGE_LEVELS', 'xpToNext', 'petStats', 'newPet', 'evadeChance', 'itemPower', 'gearPrice', 'sellValue', 'craftFee', 'SECRET'];
-const src = fs.readFileSync(file, 'utf8').replace(/\nconst HOOK_EVENTS[\s\S]*$/, '') + `\nmodule.exports = { ${exportsList.join(', ')} };`;
-const mod = new Module(file);
-mod.filename = file;
-mod.paths = Module._nodeModulePaths(root);
-mod._compile(src, file);
-const G = mod.exports;
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const pct = (v) => `${Math.round(v * 1000) / 10}%`;
 const num = (v) => (Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10);
@@ -35,7 +24,7 @@ const out = [];
 const h = (n, t) => out.push(`\n${'#'.repeat(n)} ${t}\n`);
 const p = (t) => out.push(t);
 
-out.push('# claude-pet wiki');
+out.push('# idlemon wiki');
 p('\nEverything about your pet, its gear and the monsters it meets.\n');
 p('**Contents:** [How it plays](#how-it-plays) · [Your pet](#your-pet) · [Shiny pets](#shiny-pets) · [Natures](#natures) · [Classes](#classes) · [Stats](#stats) · [Elements](#elements) · [Monsters](#monsters) · [Loot](#loot) · [Items](#items) · [Uniques](#uniques) · [Sets](#sets) · [Consumables](#consumables) · [Crates](#crates) · [Town](#town) · [Crafting](#crafting) · [Coding events](#coding-events) · [The Demon King](#the-demon-king) · [The secret boss](#the-secret-boss) · [Levels](#levels)');
 
@@ -48,7 +37,7 @@ p(`Your pet plays on its own while you work. Monsters show up as you code, and m
 - **Playing it safe:** your pet drinks Energy Drinks when it's hurt, runs from fights it's about to lose, and picks easier fights after a losing streak.`);
 
 h(2, 'Your pet');
-p(`Every pet starts as an egg. The egg quietly watches how you work, then hatches at Lv ${G.STAGE_LEVELS[1]} into one of three species. That same moment decides its nature and whether it's shiny. Run \`pet seed\` to see what yours got. It evolves again at Lv ${G.STAGE_LEVELS[2]} and reaches its final form at Lv ${G.STAGE_LEVELS[3]}, which is noticeably stronger.\n`);
+p(`Every pet starts as an egg. The egg quietly watches how you work, then hatches at Lv ${G.STAGE_LEVELS[1]} into one of three species. That same moment decides its nature and whether it's shiny. Run \`/idlemon seed\` to see what yours got. It evolves again at Lv ${G.STAGE_LEVELS[2]} and reaches its final form at Lv ${G.STAGE_LEVELS[3]}, which is noticeably stronger.\n`);
 p(table(['Species', 'Forms (Lv 5 → 15 → 30)', 'Signature skill'], Object.entries(G.SPECIES).map(([, sp]) => [
   `${sp.emoji} ${sp.label}`,
   sp.forms.map((f) => G.FORMS[f].name).join(' → '),

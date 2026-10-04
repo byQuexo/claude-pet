@@ -4,3 +4,5 @@ config.json
 .DS_Store
 node_modules/
 inner-*.json
+.claude-plugin/types/
+tsconfig.json
