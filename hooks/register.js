@@ -1,5 +1,5 @@
 import * as E from '../engine.js';
-import { toCells, toMixed, toSvg, packRows } from './screen.js';
+import { toCells, toMixed, toText, toSvg, packRows } from './screen.js';
 
 const PANE = 'idlemon';
 // Above the prompt the pane only grows as tall as it asks; the arena needs about this many rows.
@@ -109,8 +109,25 @@ function render(els, surface, lines, width, alt, key) {
   if (surface === 'desktop') {
     const source = toSvg(cells);
     if (source.length <= 131072) return els.Svg({ source, alt });
+    return toText(cells, els.Text, els.Box);
   }
   return toMixed(cells, els, key);
+}
+
+function bandTree($, e) {
+  const els = $.ui.resolve(e);
+  const width = e.props.bodyColumns;
+  E.env.columns = width;
+  const mode = E.statusMode(E.env.config);
+  if (e.surface !== 'terminal' || mode === 'compact') {
+    bandId = null;
+    const lines = mode === 'compact' ? E.statusLines(pet) : mode === 'minimal' ? E.petSprite(pet) : E.spriteCard(pet);
+    return render(els, e.surface, lines, width, `${pet.name}, level ${pet.level}`, 'band');
+  }
+  bandId = e.requestId;
+  const sprite = els.Raster({ key: 'band-pet', columns: E.STATUS_PET, rows: E.petSprite(pet).length, cells: petCells() });
+  if (mode === 'minimal') return els.Box({ flexDirection: 'row', justifyContent: 'flex-end', children: [sprite] });
+  return els.Box({ flexDirection: 'row', columnGap: 2, children: [sprite, toMixed(toCells(E.cardLines(pet), width - E.STATUS_PET - 2), els, 'band')] });
 }
 
 export function register(on) {
@@ -176,21 +193,11 @@ export function register(on) {
   });
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (!pet) return next(e);
-    const els = $.ui.resolve(e);
-    const width = e.props.bodyColumns;
-    E.env.columns = width;
-    const mode = E.statusMode(E.env.config);
-    if (e.surface !== 'terminal' || mode === 'compact') {
-      bandId = null;
-      const lines = mode === 'compact' ? E.statusLines(pet) : mode === 'minimal' ? E.petSprite(pet) : E.spriteCard(pet);
-      return render(els, e.surface, lines, width, `${pet.name}, level ${pet.level}`, 'band');
-    }
-    bandId = e.requestId;
-    const sprite = els.Raster({ key: 'band-pet', columns: E.STATUS_PET, rows: E.petSprite(pet).length, cells: petCells() });
-    if (mode === 'minimal') return els.Box({ flexDirection: 'row', justifyContent: 'flex-end', children: [sprite] });
-    const cardWidth = width - E.STATUS_PET - 2;
-    return els.Box({ flexDirection: 'row', columnGap: 2, children: [sprite, toMixed(toCells(E.cardLines(pet), cardWidth), els, 'band')] });
+    if (!pet || e.props.hasSurvey) return next(e);
+    const ours = bandTree($, e);
+    // The band is shared, so what mods after this one draw stays below the pet.
+    const theirs = await next(e);
+    return theirs ? $.ui.resolve(e).Box({ flexDirection: 'column', children: [ours, theirs] }) : ours;
   });
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {

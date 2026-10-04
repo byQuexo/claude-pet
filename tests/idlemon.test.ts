@@ -78,6 +78,9 @@ test('the band shows the card and the pane shows the arena', async ($, on) => {
   expect((await pane.find({ key: 'view-watch' })).props.dimColor).toBe(true)
   const desk = await $.ui.mount({ ...BAND, surface: 'desktop' })
   expect(await desk.find({ type: 'Svg' })).toBeDefined()
+  const deskPane = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await deskPane.find({ type: 'Raster' })).toBeUndefined()
+  expect(await deskPane.find({ key: 'view-watch' })).toBeDefined()
 })
 
 test('/idlemon mode and gear change the saved config', async ($, on) => {

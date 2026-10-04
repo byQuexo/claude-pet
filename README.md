@@ -36,7 +36,7 @@ Coming from claude-pet? Your save and display settings move over by themselves t
   - **Stats and active:** your stats on one side; buffs, tomes, set progress, unique effects and badges on the other.
   - **Log:** repeats collapse (`you committed ×3`) and purchases group.
   - **Keys:** `1` watch · `2` gear · `3` seed · `r` replay the last fight · `g` show or hide gear on the pet · `Esc` close.
-- **Desktop app:** the band and the pane draw as pictures in the Code tab. The VS Code chat panel and `claude -p` run the game but draw nothing.
+- **Desktop app:** the game runs in the Code tab too. The band draws as a picture and the pane as coloured text, since the Desktop app has no cell grid. The VS Code chat panel and `claude -p` run the game but draw nothing.
 
 ## How it plays
 
